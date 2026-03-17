@@ -1,7 +1,16 @@
 # node_modules
 node_modules/
 client/node_modules/
-server/node_modules/
+
+# pnpm
+pnpm-lock.yaml
+
+# .NET
+server-dotnet/bin/
+server-dotnet/obj/
+server-dotnet/.vs/
+*.user
+*.suo
 
 # 环境变量
 .env
