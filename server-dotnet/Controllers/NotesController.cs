@@ -20,25 +20,49 @@ public class NotesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<NotesResponse>> GetNotes([FromQuery] int? folderId, [FromQuery] string? search)
+    public async Task<ActionResult<NotesResponse>> GetNotes([FromQuery] string? folderId, [FromQuery] string? search)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
+        // 处理 folderId 字符串参数
+        int? parsedFolderId = null;
+        if (!string.IsNullOrEmpty(folderId))
+        {
+            if (folderId == "null")
+            {
+                parsedFolderId = null; // 未分类
+            }
+            else if (int.TryParse(folderId, out int fid))
+            {
+                parsedFolderId = fid;
+            }
+        }
+
         var query = _context.Notes
-            .Where(n => n.UserId == userId)
+            .Where(n => n.UserId == userId && !n.IsDeleted)
             .Include(n => n.Folder)
             .AsQueryable();
 
-        if (folderId.HasValue)
+        if (parsedFolderId.HasValue)
         {
-            query = query.Where(n => n.FolderId == (folderId == -1 ? null : folderId));
+            query = query.Where(n => n.FolderId == parsedFolderId);
+        }
+        else if (folderId == "null")
+        {
+            // 显示未分类笔记（FolderId 为 null）
+            query = query.Where(n => n.FolderId == null);
         }
 
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
         }
+
+        // 计算全部笔记数量（用于"全部笔记"显示）
+        var totalCount = await _context.Notes
+            .Where(n => n.UserId == userId && !n.IsDeleted)
+            .CountAsync();
 
         var notes = await query
             .OrderByDescending(n => n.UpdatedAt)
@@ -50,12 +74,13 @@ public class NotesController : ControllerBase
                 n.Content,
                 n.IsShared,
                 n.ShareToken,
+                n.DataVersion,
                 n.CreatedAt,
                 n.UpdatedAt
             ))
             .ToListAsync();
 
-        return Ok(new NotesResponse(notes));
+        return Ok(new NotesResponse(notes, totalCount));
     }
 
     [HttpGet("{id}")]
@@ -82,6 +107,7 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
+            note.DataVersion,
             note.CreatedAt,
             note.UpdatedAt
         )));
@@ -122,6 +148,7 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
+            note.DataVersion,
             note.CreatedAt,
             note.UpdatedAt
         )));
@@ -139,8 +166,8 @@ public class NotesController : ControllerBase
             return NotFound(new { error = "笔记不存在" });
         }
 
-        // Save version if content changed
-        if ((request.Content != null && request.Content != note.Content) || (request.Title != null && request.Title != note.Title))
+        // 只有手动点击保存版本按钮时才保存版本历史
+        if (request.SaveVersion)
         {
             var version = new server_dotnet.Models.NoteVersion
             {
@@ -155,6 +182,9 @@ public class NotesController : ControllerBase
         if (request.Content != null) note.Content = request.Content;
         if (request.FolderId != null) note.FolderId = request.FolderId == -1 ? null : request.FolderId;
 
+        // 每次保存都递增数据版本
+        note.DataVersion += 1;
+
         await _context.SaveChangesAsync();
 
         var folder = note.FolderId.HasValue ? await _context.Folders.FindAsync(note.FolderId) : null;
@@ -167,6 +197,7 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
+            note.DataVersion,
             note.CreatedAt,
             note.UpdatedAt
         )));
@@ -184,11 +215,8 @@ public class NotesController : ControllerBase
             return NotFound(new { error = "笔记不存在" });
         }
 
-        // Delete versions
-        var versions = await _context.NoteVersions.Where(v => v.NoteId == id).ToListAsync();
-        _context.NoteVersions.RemoveRange(versions);
-
-        _context.Notes.Remove(note);
+        // 逻辑删除
+        note.IsDeleted = true;
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "笔记删除成功" });
@@ -245,7 +273,7 @@ public class NotesController : ControllerBase
         }
 
         var versions = await _context.NoteVersions
-            .Where(v => v.NoteId == id)
+            .Where(v => v.NoteId == id && !v.IsDeleted)
             .OrderByDescending(v => v.CreatedAt)
             .Take(50)
             .Select(v => new NoteVersionDto(v.Id, v.Title, v.Content, v.CreatedAt))
@@ -296,9 +324,35 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
+            note.DataVersion,
             note.CreatedAt,
             note.UpdatedAt
         )));
+    }
+
+    [HttpDelete("{id}/versions/{versionId}")]
+    public async Task<ActionResult> DeleteVersion(int id, int versionId)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var note = await _context.Notes.FindAsync(id);
+        if (note == null || note.UserId != userId)
+        {
+            return NotFound(new { error = "笔记不存在" });
+        }
+
+        var version = await _context.NoteVersions.FindAsync(versionId);
+        if (version == null || version.NoteId != id)
+        {
+            return NotFound(new { error = "版本不存在" });
+        }
+
+        // 逻辑删除
+        version.IsDeleted = true;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "版本删除成功" });
     }
 
     private int? GetUserId()

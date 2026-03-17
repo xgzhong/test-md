@@ -27,19 +27,21 @@ public class FoldersController : ControllerBase
 
         var folders = await _context.Folders
             .Where(f => f.UserId == userId)
-            .OrderBy(f => f.CreatedAt)
+            .OrderByDescending(f => f.IsPinned)
+            .ThenBy(f => f.SortOrder)
+            .ThenBy(f => f.CreatedAt)
             .ToListAsync();
 
         var foldersWithCount = new List<FolderDto>();
         foreach (var folder in folders)
         {
             var noteCount = await _context.Notes
-                .CountAsync(n => n.FolderId == folder.Id && n.UserId == userId);
-            foldersWithCount.Add(new FolderDto(folder.Id, folder.Name, noteCount));
+                .CountAsync(n => n.FolderId == folder.Id && n.UserId == userId && !n.IsDeleted);
+            foldersWithCount.Add(new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned));
         }
 
         var uncategorizedCount = await _context.Notes
-            .CountAsync(n => n.FolderId == null && n.UserId == userId);
+            .CountAsync(n => n.FolderId == null && n.UserId == userId && !n.IsDeleted);
 
         return Ok(new FoldersResponse(foldersWithCount, uncategorizedCount));
     }
@@ -64,7 +66,7 @@ public class FoldersController : ControllerBase
         _context.Folders.Add(folder);
         await _context.SaveChangesAsync();
 
-        return StatusCode(201, new FolderResponse("分类创建成功", new FolderDto(folder.Id, folder.Name, 0)));
+        return StatusCode(201, new FolderResponse("分类创建成功", new FolderDto(folder.Id, folder.Name, 0, folder.SortOrder, folder.IsPinned)));
     }
 
     [HttpPut("{id}")]
@@ -86,9 +88,9 @@ public class FoldersController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        var noteCount = await _context.Notes.CountAsync(n => n.FolderId == folder.Id && n.UserId == userId);
+        var noteCount = await _context.Notes.CountAsync(n => n.FolderId == folder.Id && n.UserId == userId && !n.IsDeleted);
 
-        return Ok(new FolderResponse("分类更新成功", new FolderDto(folder.Id, folder.Name, noteCount)));
+        return Ok(new FolderResponse("分类更新成功", new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned)));
     }
 
     [HttpDelete("{id}")]
@@ -114,6 +116,47 @@ public class FoldersController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "分类删除成功" });
+    }
+
+    [HttpPut("reorder")]
+    public async Task<ActionResult> ReorderFolders([FromBody] List<int> folderIds)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        for (int i = 0; i < folderIds.Count; i++)
+        {
+            var folder = await _context.Folders.FindAsync(folderIds[i]);
+            if (folder != null && folder.UserId == userId)
+            {
+                folder.SortOrder = i;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "排序更新成功" });
+    }
+
+    [HttpPut("{id}/pin")]
+    public async Task<ActionResult<FolderResponse>> TogglePin(int id)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var folder = await _context.Folders.FindAsync(id);
+        if (folder == null || folder.UserId != userId)
+        {
+            return NotFound(new { error = "分类不存在" });
+        }
+
+        folder.IsPinned = !folder.IsPinned;
+        await _context.SaveChangesAsync();
+
+        var noteCount = await _context.Notes.CountAsync(n => n.FolderId == folder.Id && n.UserId == userId && !n.IsDeleted);
+
+        var message = folder.IsPinned ? "置顶成功" : "取消置顶成功";
+        return Ok(new FolderResponse(message, new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned)));
     }
 
     private int? GetUserId()

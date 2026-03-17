@@ -8,10 +8,13 @@ A web-based Markdown note-taking application with category management, version h
 
 - **User Authentication** - Register, login, JWT token authentication
 - **Note Management** - Create, edit, delete Markdown notes
-- **Category Management** - Organize notes into folders
-- **Version History** - Auto-save note history with restore capability
+- **Category Management** - Organize notes into folders with drag-and-drop sorting and pinning
+- **Version History** - Manual save version history with restore and delete support
 - **Note Sharing** - Generate shareable links for others to view
 - **Markdown Rendering** - Real-time Markdown preview
+- **Sidebar** - Collapsible/expandable
+- **Work Log** - Auto-generate monthly work log template
+- **Data Version** - Auto-delete new notes that are not saved
 
 ## Tech Stack
 
@@ -28,7 +31,7 @@ A web-based Markdown note-taking application with category management, version h
 
 - ASP.NET Core 10.0
 - Entity Framework Core
-- SQLite
+- MySQL
 - JWT Authentication
 
 ## Project Structure

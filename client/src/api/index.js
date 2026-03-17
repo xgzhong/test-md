@@ -53,6 +53,7 @@ export const notesAPI = {
   share: (id) => api.post(`/notes/${id}/share`),
   unshare: (id) => api.post(`/notes/${id}/unshare`),
   getVersions: (id) => api.get(`/notes/${id}/versions`),
+  deleteVersion: (noteId, versionId) => api.delete(`/notes/${noteId}/versions/${versionId}`),
   restore: (id, versionId) => api.post(`/notes/${id}/restore/${versionId}`)
 }
 
@@ -61,7 +62,9 @@ export const foldersAPI = {
   getAll: () => api.get('/folders'),
   create: (data) => api.post('/folders', data),
   update: (id, data) => api.put(`/folders/${id}`, data),
-  delete: (id) => api.delete(`/folders/${id}`)
+  delete: (id) => api.delete(`/folders/${id}`),
+  reorder: (folderIds) => api.put('/folders/reorder', folderIds),
+  togglePin: (id) => api.put(`/folders/${id}/pin`)
 }
 
 // 分享

@@ -26,6 +26,15 @@ public class Note
 
     public string? ShareToken { get; set; }
 
+    [Required]
+    public bool IsDeleted { get; set; } = false;
+
+    /// <summary>
+    /// 数据版本：0表示新建未保存，>=1表示已保存过
+    /// </summary>
+    [Required]
+    public int DataVersion { get; set; } = 0;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

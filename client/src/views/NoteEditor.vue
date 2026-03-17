@@ -21,16 +21,20 @@
           <span>未分类</span>
         </div>
 
-        <div style="padding: 10px 15px; font-weight: bold; color: #666;">分类</div>
+        <div class="sidebar-section-header">
+          <span class="sidebar-section-title">分类</span>
+        </div>
 
-        <div
-          v-for="folder in folders"
-          :key="folder.id"
-          class="folder-item"
-          :class="{ active: currentFolder === folder.id }"
-          @click="selectFolder(folder.id)"
-        >
-          <span>{{ folder.name }}</span>
+        <div class="folder-list">
+          <div
+            v-for="folder in folders"
+            :key="folder.id"
+            class="folder-item"
+            :class="{ active: currentFolder === folder.id }"
+            @click="selectFolder(folder.id)"
+          >
+            <span class="folder-name">{{ folder.name }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -38,12 +42,17 @@
     <!-- 编辑器区域 -->
     <div class="main-content" style="background: white;">
       <div class="content-header">
-        <el-input
-          v-model="noteTitle"
-          placeholder="笔记标题"
-          style="font-size: 18px; font-weight: bold;"
-          @blur="saveNote"
-        />
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span v-if="showSavedTip" style="color: #67c23a; font-size: 12px; width: 40px;">已保存</span>
+          <span v-else style="width: 40px;"></span>
+          <el-input
+            v-model="noteTitle"
+            placeholder="笔记标题"
+            style="font-size: 18px; font-weight: bold; width: 350px;"
+            @input="handleTitleInput"
+          />
+          <el-button type="primary" @click="manualSave">保存版本</el-button>
+        </div>
         <div style="display: flex; gap: 10px;">
           <el-select
             v-model="noteFolderId"
@@ -106,8 +115,11 @@
           class="version-item"
           @click="viewVersion(version)"
         >
-          <div class="time">{{ formatDate(version.createdAt) }}</div>
-          <div class="preview">{{ version.title }}</div>
+          <div class="version-content">
+            <div class="time">{{ formatDate(version.createdAt) }}</div>
+            <div class="preview">{{ version.title }}</div>
+          </div>
+          <el-icon class="version-delete-icon" @click.stop="confirmDeleteVersion(version)"><Delete /></el-icon>
         </div>
       </div>
     </div>
@@ -152,8 +164,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, reactive, onMounted, computed, watch, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import { notesAPI, foldersAPI } from '../api'
@@ -166,6 +178,8 @@ const note = ref({})
 const noteTitle = ref('')
 const noteContent = ref('')
 const noteFolderId = ref(null)
+const isNewNote = ref(false)
+const dataVersion = ref(0)
 const folders = ref([])
 const currentFolder = ref(null)
 const versions = ref([])
@@ -174,6 +188,11 @@ const showShareDialog = ref(false)
 const showVersionPreview = ref(false)
 const shareUrl = ref('')
 const selectedVersion = ref(null)
+const hasUnsavedChanges = ref(false)
+const originalContent = ref('')
+const originalTitle = ref('')
+const showSavedTip = ref(false)
+let savedTipTimer = null
 
 let saveTimer = null
 
@@ -193,10 +212,20 @@ const loadNote = async () => {
     noteTitle.value = res.note.title
     noteContent.value = res.note.content
     noteFolderId.value = res.note.folderId
+    dataVersion.value = res.note.dataVersion || 0
+
+    // 记录原始内容，用于检测是否有未保存的更改
+    originalTitle.value = res.note.title || ''
+    originalContent.value = res.note.content || ''
+
+    // 用数据版本判断是否是新建的笔记（0表示新建未保存，>=1表示已保存过）
+    isNewNote.value = dataVersion.value === 0
 
     if (res.note.folderId) {
       currentFolder.value = res.note.folderId
     }
+
+    hasUnsavedChanges.value = false
   } catch (error) {
     ElMessage.error(error.message)
     router.push('/home')
@@ -224,23 +253,79 @@ const loadVersions = async () => {
 const saveNote = async () => {
   if (!noteId.value) return
 
+  // 如果是新建的空笔记且没有任何内容，不保存
+  if (dataVersion.value === 0 && !noteTitle.value && !noteContent.value) {
+    return
+  }
+
   try {
-    await notesAPI.update(noteId.value, {
-      title: noteTitle.value,
+    const res = await notesAPI.update(noteId.value, {
+      title: noteTitle.value || '无标题笔记',
       content: noteContent.value,
       folderId: noteFolderId.value
     })
+    // 保存成功后更新原始值和数据版本
+    originalTitle.value = noteTitle.value || '无标题笔记'
+    originalContent.value = noteContent.value
+    dataVersion.value = res.note?.dataVersion || dataVersion.value + 1
+    hasUnsavedChanges.value = false
+    // 标记不再是新建笔记
+    isNewNote.value = false
+    // 显示"已保存"提示
+    showSavedTip.value = true
+    if (savedTipTimer) clearTimeout(savedTipTimer)
+    savedTipTimer = setTimeout(() => {
+      showSavedTip.value = false
+    }, 2000)
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+// 手动保存，记录版本历史
+const manualSave = async () => {
+  if (!noteId.value) return
+
+  try {
+    const res = await notesAPI.update(noteId.value, {
+      title: noteTitle.value || '无标题笔记',
+      content: noteContent.value,
+      folderId: noteFolderId.value,
+      saveVersion: true
+    })
+    // 保存成功后更新原始值和数据版本
+    originalTitle.value = noteTitle.value || '无标题笔记'
+    originalContent.value = noteContent.value
+    dataVersion.value = res.note?.dataVersion || dataVersion.value + 1
+    hasUnsavedChanges.value = false
+    // 标记不再是新建笔记
+    isNewNote.value = false
+    // 显示"已保存"提示
+    showSavedTip.value = true
+    if (savedTipTimer) clearTimeout(savedTipTimer)
+    savedTipTimer = setTimeout(() => {
+      showSavedTip.value = false
+    }, 2000)
+    ElMessage.success('保存成功')
   } catch (error) {
     ElMessage.error(error.message)
   }
 }
 
 const handleInput = () => {
+  // 检测是否有未保存的更改
+  hasUnsavedChanges.value = noteTitle.value !== originalTitle.value || noteContent.value !== originalContent.value
+
   // 防抖保存
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     saveNote()
   }, 1000)
+}
+
+const handleTitleInput = () => {
+  // 检测是否有未保存的更改
+  hasUnsavedChanges.value = noteTitle.value !== originalTitle.value || noteContent.value !== originalContent.value
 }
 
 const handleShare = async () => {
@@ -303,17 +388,145 @@ const restoreVersion = async () => {
   }
 }
 
+const confirmDeleteVersion = (version) => {
+  ElMessageBox.confirm(`确定要删除该版本吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await notesAPI.deleteVersion(noteId.value, version.id)
+      ElMessage.success('删除成功')
+      loadVersions()
+    } catch (error) {
+      ElMessage.error(error.message)
+    }
+  }).catch(() => {})
+}
+
+// 统一的离开确认逻辑
+const confirmBeforeLeave = async () => {
+  // 如果是新建的笔记（包括空笔记和工作日志）且没有编辑，直接删除
+  if (dataVersion.value === 0) {
+    const hasChanges = noteTitle.value !== originalTitle.value || noteContent.value !== originalContent.value
+    if (!hasChanges) {
+      try {
+        await notesAPI.delete(noteId.value)
+      } catch (error) {
+        // 忽略删除错误
+      }
+      return true
+    }
+  }
+
+  // 如果有未保存的更改，提示用户
+  const currentHasChanges = noteTitle.value !== originalTitle.value || noteContent.value !== originalContent.value
+  if (currentHasChanges || hasUnsavedChanges.value) {
+    return new Promise((resolve) => {
+      ElMessageBox.confirm('您有未保存的更改，确定要离开吗？', '提示', {
+        confirmButtonText: '保存并离开',
+        cancelButtonText: '不保存',
+        distinguishCancelAndClose: true,
+        type: 'warning'
+      }).then(async () => {
+        // 保存并离开
+        await saveNote()
+        resolve(true)
+      }).catch(async (action) => {
+        if (action === 'cancel') {
+          // 不保存，直接离开，如果是新建的笔记则删除
+          if (dataVersion.value === 0) {
+            try {
+              await notesAPI.delete(noteId.value)
+            } catch (error) {
+              // 忽略删除错误
+            }
+          }
+          resolve(true)
+        }
+        // close 被点击时留在页面
+        resolve(false)
+      })
+    })
+  }
+
+  return true
+}
+
 const selectFolder = (folderId) => {
-  currentFolder.value = folderId
-  router.push('/home')
+  // 检查是否有未保存的更改
+  const currentHasChanges = noteTitle.value !== originalTitle.value || noteContent.value !== originalContent.value || hasUnsavedChanges.value
+
+  if (!currentHasChanges) {
+    // 没有更改，直接跳转
+    // 如果是新建的笔记且没有内容则删除
+    if (dataVersion.value === 0 && !noteTitle.value && !noteContent.value) {
+      notesAPI.delete(noteId.value).catch(() => {})
+    }
+    router.push('/home')
+    return
+  }
+
+  // 有更改，弹出确认框
+  ElMessageBox.confirm('您有未保存的更改，确定要离开吗？', '提示', {
+    confirmButtonText: '保存并离开',
+    cancelButtonText: '不保存',
+    distinguishCancelAndClose: true,
+    type: 'warning'
+  }).then(async () => {
+    // 保存并离开
+    await saveNote()
+    router.push('/home')
+  }).catch((action) => {
+    if (action === 'cancel') {
+      // 不保存，直接离开，如果是新建的笔记则删除
+      if (dataVersion.value === 0) {
+        notesAPI.delete(noteId.value).catch(() => {})
+      }
+      router.push('/home')
+    }
+    // close 或其他 action 留在当前页面
+  })
 }
 
 const goHome = () => {
-  router.push('/home')
+  // 检查是否有未保存的更改
+  const currentHasChanges = noteTitle.value !== originalTitle.value || noteContent.value !== originalContent.value || hasUnsavedChanges.value
+
+  if (!currentHasChanges) {
+    // 没有更改，直接跳转
+    // 如果是新建的笔记且没有内容则删除
+    if (dataVersion.value === 0 && !noteTitle.value && !noteContent.value) {
+      notesAPI.delete(noteId.value).catch(() => {})
+    }
+    router.push('/home')
+    return
+  }
+
+  // 有更改，弹出确认框
+  ElMessageBox.confirm('您有未保存的更改，确定要离开吗？', '提示', {
+    confirmButtonText: '保存并离开',
+    cancelButtonText: '不保存',
+    distinguishCancelAndClose: true,
+    type: 'warning'
+  }).then(async () => {
+    // 保存并离开
+    await saveNote()
+    router.push('/home')
+  }).catch((action) => {
+    if (action === 'cancel') {
+      // 不保存，直接离开，如果是新建的笔记则删除
+      if (dataVersion.value === 0) {
+        notesAPI.delete(noteId.value).catch(() => {})
+      }
+      router.push('/home')
+    }
+    // close 或其他 action 留在当前页面
+  })
 }
 
 const formatDate = (dateStr) => {
-  const date = new Date(dateStr)
+  const date = new Date(dateStr + 'Z')
   return date.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: 'short',
@@ -322,6 +535,11 @@ const formatDate = (dateStr) => {
     minute: '2-digit'
   })
 }
+
+// 离开页面前的确认（用于浏览器后退按钮）
+onBeforeRouteLeave(async () => {
+  return await confirmBeforeLeave()
+})
 
 onMounted(() => {
   noteId.value = route.params.id

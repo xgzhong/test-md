@@ -19,6 +19,9 @@ public class NoteVersion
 
     public string Content { get; set; } = string.Empty;
 
+    [Required]
+    public bool IsDeleted { get; set; } = false;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties
