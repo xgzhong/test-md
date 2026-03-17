@@ -29,7 +29,7 @@
 
 ### 后端
 
-- ASP.NET Core 10.0
+- ASP.NET Core 9.0
 - Entity Framework Core
 - MySQL
 - JWT 认证
@@ -38,22 +38,28 @@
 
 ```
 test-md/
-├── client/                 # 前端项目 (Vue 3)
+├── client/                      # 前端项目 (Vue 3)
 │   ├── src/
-│   │   ├── api/           # API 请求
-│   │   ├── views/         # 页面组件
-│   │   ├── router/        # 路由配置
-│   │   └── main.js        # 入口文件
-│   └── package.json
+│   │   ├── api/               # API 请求
+│   │   ├── views/             # 页面组件
+│   │   ├── router/            # 路由配置
+│   │   ├── style.css          # 全局样式
+│   │   ├── main.js            # 入口文件
+│   │   └── App.vue            # 根组件
+│   ├── package.json
+│   └── vite.config.js         # Vite 配置
 │
-├── server-dotnet/          # 后端项目 (.NET 10.0)
-│   ├── Controllers/       # API 控制器
-│   ├── Models/            # 数据模型
-│   ├── Data/              # 数据库上下文
-│   ├── DTOs/              # 数据传输对象
-│   └── Program.cs         # 入口文件
+├── server-dotnet/               # 后端项目 (.NET 9.0)
+│   ├── Controllers/            # API 控制器
+│   ├── Models/                # 数据模型
+│   ├── Data/                  # 数据库上下文
+│   ├── DTOs/                  # 数据传输对象
+│   ├── Properties/             # 启动配置
+│   ├── appsettings.json       # 配置文件
+│   └── Program.cs              # 入口文件
 │
-└── README-en.md               # 英文版 README
+├── README.md                    # 中文版 README
+└── README-en.md                # 英文版 README
 ```
 
 ## 快速开始
@@ -62,7 +68,7 @@ test-md/
 
 - Node.js 18+
 - pnpm 9+
-- .NET SDK 10.0+
+- .NET SDK 9.0+
 
 ### 安装
 

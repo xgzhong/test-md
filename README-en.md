@@ -29,7 +29,7 @@ A web-based Markdown note-taking application with category management, version h
 
 ### Backend
 
-- ASP.NET Core 10.0
+- ASP.NET Core 9.0
 - Entity Framework Core
 - MySQL
 - JWT Authentication
@@ -38,22 +38,28 @@ A web-based Markdown note-taking application with category management, version h
 
 ```
 test-md/
-├── client/                 # Frontend (Vue 3)
+├── client/                      # Frontend (Vue 3)
 │   ├── src/
-│   │   ├── api/           # API requests
-│   │   ├── views/         # Page components
-│   │   ├── router/        # Router config
-│   │   └── main.js        # Entry point
-│   └── package.json
+│   │   ├── api/               # API requests
+│   │   ├── views/             # Page components
+│   │   ├── router/            # Router config
+│   │   ├── style.css          # Global styles
+│   │   ├── main.js            # Entry point
+│   │   └── App.vue            # Root component
+│   ├── package.json
+│   └── vite.config.js         # Vite config
 │
-├── server-dotnet/          # Backend (.NET 10.0)
-│   ├── Controllers/       # API controllers
-│   ├── Models/            # Data models
-│   ├── Data/              # DB context
-│   ├── DTOs/              # Data transfer objects
-│   └── Program.cs         # Entry point
+├── server-dotnet/               # Backend (.NET 9.0)
+│   ├── Controllers/            # API controllers
+│   ├── Models/                # Data models
+│   ├── Data/                  # DB context
+│   ├── DTOs/                  # Data transfer objects
+│   ├── Properties/             # Startup config
+│   ├── appsettings.json       # Config file
+│   └── Program.cs             # Entry point
 │
-└── README.md               # Chinese README
+├── README.md                    # Chinese README
+└── README-en.md                # English README
 ```
 
 ## Quick Start
@@ -62,7 +68,7 @@ test-md/
 
 - Node.js 18+
 - pnpm 9+
-- .NET SDK 10.0+
+- .NET SDK 9.0+
 
 ### Installation
 
