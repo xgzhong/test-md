@@ -1,3 +1,5 @@
+[English](./README-en.md)
+
 # Markdown Notes App
 
 一个基于 Web 的 Markdown 笔记应用，支持笔记分类、历史版本管理和分享功能。
@@ -146,7 +148,3 @@ pnpm build
 ## 许可证
 
 MIT License
-
----
-
-[English](./README-en.md)

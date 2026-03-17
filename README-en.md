@@ -1,3 +1,5 @@
+[中文](./README.md)
+
 # Markdown Notes App
 
 A web-based Markdown note-taking application with category management, version history, and sharing features.
@@ -146,7 +148,3 @@ The frontend proxies to `http://localhost:5000` by default. Edit `vite.config.js
 ## License
 
 MIT License
-
----
-
-[中文](./README.md)
