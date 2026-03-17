@@ -53,7 +53,7 @@ test-md/
 │   ├── DTOs/              # 数据传输对象
 │   └── Program.cs         # 入口文件
 │
-└── pnpm-workspace.yaml    # pnpm 工作区配置
+└── README-en.md               # 英文版 README
 ```
 
 ## 快速开始

@@ -53,7 +53,7 @@ test-md/
 │   ├── DTOs/              # Data transfer objects
 │   └── Program.cs         # Entry point
 │
-└── pnpm-workspace.yaml    # pnpm workspace config
+└── README.md               # Chinese README
 ```
 
 ## Quick Start
