@@ -27,6 +27,16 @@ server-dotnet/.vs/
 *.log
 npm-debug.log*
 
+# Claude Code
+.claude/
+
+# Client build output
+client/dist/
+
+# .NET publish profiles and tools
+server-dotnet/Properties/PublishProfiles/
+server-dotnet/dotnet-tools.json
+
 # 系统文件
 .DS_Store
 Thumbs.db
