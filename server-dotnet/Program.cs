@@ -1,13 +1,33 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using server_dotnet.Converters;
 using server_dotnet.Data;
+using Yitter.IdGenerator;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
-builder.Services.AddControllers();
+// Initialize Yitter IdGenerator (雪花ID生成器)
+var snowflakeBaseTimeStr = builder.Configuration["SnowflakeId:BaseTime"] ?? "2026-03-15 00:00:00";
+var snowflakeBaseTime = DateTime.ParseExact(snowflakeBaseTimeStr, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+var idGeneratorOptions = new IdGeneratorOptions(1)
+{
+    BaseTime = new DateTime(snowflakeBaseTime.Ticks, DateTimeKind.Utc)
+};
+YitIdHelper.SetIdGenerator(idGeneratorOptions);
+
+// Configure JSON to serialize long values as strings and DateTime in yyyy-MM-dd HH:mm:ss format
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new LongToStringConverter());
+        options.JsonSerializerOptions.Converters.Add(new NullableLongToStringConverter());
+        options.JsonSerializerOptions.Converters.Add(new DateTimeConverter());
+        options.JsonSerializerOptions.Converters.Add(new DateTimeOffsetConverter());
+    });
 builder.Services.AddOpenApi();
 
 // Configure MySQL database

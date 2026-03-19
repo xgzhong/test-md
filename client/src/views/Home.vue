@@ -49,12 +49,15 @@
           >
             <el-icon v-if="folder.isPinned" class="folder-pin-icon"><Star /></el-icon>
             <span v-else class="folder-index">{{ index + 1 }}.</span>
-            <span class="folder-name">{{ folder.name }}</span>
+            <el-tooltip :content="folder.name" placement="top" :disabled="folder.name.length <= 10">
+              <span class="folder-name">{{ folder.name }}</span>
+            </el-tooltip>
             <el-tag size="small">{{ folder.noteCount }}</el-tag>
             <el-icon class="folder-pin-btn" @click.stop="togglePinFolder(folder)">
               <span v-if="folder.isPinned">&#x2605;</span>
               <span v-else>&#x2606;</span>
             </el-icon>
+            <el-icon class="folder-edit-icon" @click.stop="editFolderName(folder)"><Edit /></el-icon>
             <el-icon class="folder-delete-icon" @click.stop="confirmDeleteFolder(folder)"><Delete /></el-icon>
           </div>
         </div>
@@ -128,6 +131,9 @@
               <el-tag v-if="note.isShared" size="small" type="success" style="margin-left: 10px;">
                 已分享
               </el-tag>
+              <span v-if="getFolderName(note.folderId)" class="note-folder-name">
+                {{ getFolderName(note.folderId) }}
+              </span>
             </div>
           </div>
         </div>
@@ -146,10 +152,11 @@
     </div>
 
     <!-- 新建分类对话框 -->
-    <el-dialog v-model="showFolderDialog" title="新建分类" width="400px">
+    <el-dialog v-model="showFolderDialog" title="新建分类" width="400px" @opened="folderInputRef?.focus()">
       <el-form :model="folderForm" @submit.prevent="createFolder">
         <el-form-item>
           <el-input
+            ref="folderInputRef"
             v-model="folderForm.name"
             placeholder="分类名称"
             @keyup.enter="createFolder"
@@ -161,6 +168,24 @@
         <el-button type="primary" @click="createFolder">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 修改分类名称对话框 -->
+    <el-dialog v-model="showEditFolderDialog" title="修改分类名称" width="400px" @opened="editFolderInputRef?.focus()">
+      <el-form :model="editFolderForm" @submit.prevent="updateFolderName">
+        <el-form-item>
+          <el-input
+            ref="editFolderInputRef"
+            v-model="editFolderForm.name"
+            placeholder="分类名称"
+            @keyup.enter="updateFolderName"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditFolderDialog = false">取消</el-button>
+        <el-button type="primary" @click="updateFolderName">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -168,7 +193,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Document, Delete, Star, Fold, Expand } from '@element-plus/icons-vue'
+import { Plus, Search, Document, Delete, Star, Fold, Expand, Edit } from '@element-plus/icons-vue'
 import { notesAPI, foldersAPI } from '../api'
 
 const router = useRouter()
@@ -181,8 +206,15 @@ const searchText = ref('')
 const uncategorizedCount = ref(0)
 const totalCount = ref(0)
 const showFolderDialog = ref(false)
+const showEditFolderDialog = ref(false)
 const sidebarCollapsed = ref(false)
+const folderInputRef = ref(null)
+const editFolderInputRef = ref(null)
 const folderForm = reactive({
+  name: ''
+})
+const editFolderForm = reactive({
+  id: null,
   name: ''
 })
 
@@ -379,6 +411,28 @@ const createFolder = async () => {
   }
 }
 
+const editFolderName = (folder) => {
+  editFolderForm.id = folder.id
+  editFolderForm.name = folder.name
+  showEditFolderDialog.value = true
+}
+
+const updateFolderName = async () => {
+  if (!editFolderForm.name.trim()) {
+    ElMessage.warning('请输入分类名称')
+    return
+  }
+
+  try {
+    await foldersAPI.update(editFolderForm.id, { name: editFolderForm.name })
+    ElMessage.success('分类名称修改成功')
+    showEditFolderDialog.value = false
+    loadFolders()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
 const logout = () => {
   ElMessageBox.confirm('确定要退出登录吗？', '提示', {
     confirmButtonText: '确定',
@@ -399,6 +453,13 @@ const formatDate = (dateStr) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const getFolderName = (folderId) => {
+  if (!folderId) return ''
+  const folder = folders.value.find(f => f.id === folderId)
+  if (!folder) return ''
+  return folder.name.length > 8 ? folder.name.substring(0, 8) + '...' : folder.name
 }
 
 onMounted(() => {

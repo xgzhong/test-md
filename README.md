@@ -8,13 +8,14 @@
 
 - **用户认证** - 注册、登录、JWT 令牌认证
 - **笔记管理** - 创建、编辑、删除 Markdown 笔记
-- **分类管理** - 文件夹分类整理，支持拖拽排序和置顶
+- **分类管理** - 文件夹分类整理，支持拖拽排序、置顶、编辑名称
 - **历史版本** - 手动保存版本历史，支持版本回溯和删除
 - **笔记分享** - 生成分享链接他人查看
 - **Markdown 渲染** - 实时预览 Markdown 内容
 - **侧边栏** - 支持折叠和展开
 - **工作日志** - 自动生成当月工作日志模板
-- **数据版本** - 笔记版本追踪，自动递增
+- **雪花ID** - 使用 Yitter.IdGenerator 生成分布式 ID
+- **数据版本** - 每条记录包含 Version、CreatedBy、UpdatedBy 审计字段
 
 ## 技术栈
 
@@ -29,10 +30,12 @@
 
 ### 后端
 
-- ASP.NET Core 9.0
+- ASP.NET Core 10.0
 - Entity Framework Core
 - MySQL
 - JWT 认证
+- Yitter.IdGenerator (雪花ID)
+- BCrypt.Net-Next (密码加密)
 
 ## 项目结构
 
@@ -45,8 +48,8 @@ test-md/
 │   │   │   ├── Login.vue        # 登录页面
 │   │   │   ├── Register.vue      # 注册页面
 │   │   │   ├── Home.vue         # 笔记列表主页
-│   │   │   ├── NoteEditor.vue   # Markdown 编辑器
-│   │   │   └── Shared.vue       # 分享笔记页面
+│   │   │   ├── NoteEditor.vue    # Markdown 编辑器
+│   │   │   └── Shared.vue        # 分享笔记页面
 │   │   ├── router/              # 路由配置
 │   │   ├── main.js              # 入口文件
 │   │   ├── App.vue              # 根组件
@@ -55,12 +58,12 @@ test-md/
 │   ├── package.json
 │   └── vite.config.js           # Vite 配置
 │
-├── server-dotnet/               # 后端项目 (.NET 9.0)
+├── server-dotnet/               # 后端项目 (.NET 10.0)
 │   ├── Controllers/             # API 控制器
-│   │   ├── AuthController.cs    # 认证接口
-│   │   ├── NotesController.cs   # 笔记接口
-│   │   ├── FoldersController.cs # 分类接口
-│   │   └── SharedController.cs  # 分享接口
+│   │   ├── AuthController.cs     # 认证接口
+│   │   ├── NotesController.cs     # 笔记接口
+│   │   ├── FoldersController.cs   # 分类接口
+│   │   └── SharedController.cs    # 分享接口
 │   ├── Models/                   # 数据模型
 │   │   ├── User.cs
 │   │   ├── Note.cs
@@ -68,18 +71,49 @@ test-md/
 │   │   └── NoteVersion.cs
 │   ├── Data/                     # 数据库上下文
 │   │   └── AppDbContext.cs
-│   ├── DTOs/                     # 数据传输对象
+│   ├── DTOs/                    # 数据传输对象
 │   │   ├── AuthDtos.cs
 │   │   └── NoteVersionDto.cs
-│   ├── Properties/               # 启动配置
-│   ├── appsettings.json          # 配置文件
-│   ├── Program.cs                # 入口文件
+│   ├── Converters/              # JSON 转换器
+│   │   ├── LongToStringConverter.cs
+│   │   ├── NullableLongToStringConverter.cs
+│   │   ├── DateTimeConverter.cs
+│   │   └── DateTimeOffsetConverter.cs
+│   ├── Properties/              # 启动配置
+│   ├── appsettings.json         # 配置文件
+│   ├── Program.cs               # 入口文件
 │   ├── server-dotnet.csproj
 │   └── server-dotnet.slnx
 │
 ├── README.md                     # 中文版 README
-└── README-en.md                  # 英文版 README
+└── README-en.md                 # 英文版 README
 ```
+
+## 数据库设计
+
+### 表结构
+
+所有表使用雪花ID作为主键（`BIGINT`），包含审计字段：
+
+- **users** - 用户表
+- **folders** - 分类表
+- **notes** - 笔记表
+- **note_versions** - 笔记版本表
+
+### 字段规范
+
+| 字段类型 | 说明 |
+|---------|------|
+| Id | 雪花ID (BIGINT)，使用 Yitter.IdGenerator 生成 |
+| Version | 数据版本号 (BIGINT)，雪花ID格式 |
+| CreatedAt/UpdatedAt | 时间戳 (DateTimeOffset) |
+| CreatedBy/UpdatedBy | 创建人/修改人 ID (BIGINT) |
+
+### JSON 序列化
+
+API 返回格式：
+- `long` 类型 ID 以字符串形式返回（如 `"id": "785339216482373"`）
+- `DateTime` 以 `yyyy-MM-dd HH:mm:ss` 格式返回（如 `"2026-03-19 05:34:27"`）
 
 ## 快速开始
 
@@ -87,7 +121,7 @@ test-md/
 
 - Node.js 18+
 - pnpm 9+
-- .NET SDK 9.0+
+- .NET SDK 10.0+
 - MySQL 5.7+
 
 ### 安装
@@ -104,24 +138,29 @@ dotnet restore
 
 ### 配置
 
-1. **后端配置** (`server-dotnet/appsettings.json`):
+1. **数据库配置** (确保 MySQL 服务运行):
+
+```sql
+CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+2. **后端配置** (`server-dotnet/appsettings.json`):
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=markdown_notes;User=root;Password=your_password;"
+    "DefaultConnection": "Server=localhost;Port=3306;Database=markdown_notes;User=user01;Password=your_password;"
   },
   "Jwt": {
     "Secret": "your-secret-key-change-in-production"
+  },
+  "SnowflakeId": {
+    "BaseTime": "2026-03-15 00:00:00"
   }
 }
 ```
 
-2. **创建数据库** (确保 MySQL 服务运行):
-
-```sql
-CREATE DATABASE markdown_notes;
-```
+> **注意**: 雪花ID的 BaseTime 可自定义，用于计算时间戳。
 
 ### 启动开发服务器
 

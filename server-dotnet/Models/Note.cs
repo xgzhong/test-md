@@ -7,13 +7,13 @@ namespace server_dotnet.Models;
 public class Note
 {
     [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
+    public long Id { get; set; }
 
     [Required]
-    public int UserId { get; set; }
+    public long UserId { get; set; }
 
-    public int? FolderId { get; set; }
+    public long? FolderId { get; set; }
 
     [Required]
     [MaxLength(255)]
@@ -30,14 +30,17 @@ public class Note
     public bool IsDeleted { get; set; } = false;
 
     /// <summary>
-    /// 数据版本：0表示新建未保存，>=1表示已保存过
+    /// 数据版本：雪花ID，用于记录版本
     /// </summary>
-    [Required]
-    public int DataVersion { get; set; } = 0;
+    public long Version { get; set; } = 0;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public long? CreatedBy { get; set; }
+
+    public long? UpdatedBy { get; set; }
 
     // Navigation properties
     [ForeignKey("UserId")]

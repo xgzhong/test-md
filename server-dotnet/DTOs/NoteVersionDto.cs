@@ -1,3 +1,3 @@
 namespace server_dotnet.DTOs;
 
-public record NoteVersionDto(int Id, string Title, string Content, DateTime CreatedAt);
+public record NoteVersionDto(long Id, string Title, string Content, DateTimeOffset CreatedAt);

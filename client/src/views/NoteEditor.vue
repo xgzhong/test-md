@@ -1,5 +1,5 @@
 <template>
-  <div class="main-layout">
+  <div class="main-layout" @click="handleOutsideClick">
     <!-- 侧边栏 -->
     <div class="sidebar">
       <div class="sidebar-header" style="cursor: pointer;" @click="goHome">
@@ -540,6 +540,15 @@ const formatDate = (dateStr) => {
 onBeforeRouteLeave(async () => {
   return await confirmBeforeLeave()
 })
+
+const handleOutsideClick = (event) => {
+  if (!showVersions.value) return
+  const versionsPanel = document.querySelector('.versions-panel')
+  const contentHeader = document.querySelector('.content-header')
+  if (versionsPanel && !versionsPanel.contains(event.target) && contentHeader && !contentHeader.contains(event.target)) {
+    showVersions.value = false
+  }
+}
 
 onMounted(() => {
   noteId.value = route.params.id

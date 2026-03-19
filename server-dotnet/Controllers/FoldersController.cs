@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
+using Yitter.IdGenerator;
 
 namespace server_dotnet.Controllers;
 
@@ -59,8 +60,13 @@ public class FoldersController : ControllerBase
 
         var folder = new server_dotnet.Models.Folder
         {
+            Id = YitIdHelper.NextId(),
             UserId = userId.Value,
-            Name = request.Name
+            Name = request.Name,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = userId.Value,
+            UpdatedBy = userId.Value
         };
 
         _context.Folders.Add(folder);
@@ -70,7 +76,7 @@ public class FoldersController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<FolderResponse>> UpdateFolder(int id, [FromBody] UpdateFolderRequest request)
+    public async Task<ActionResult<FolderResponse>> UpdateFolder(long id, [FromBody] UpdateFolderRequest request)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -86,6 +92,9 @@ public class FoldersController : ControllerBase
             folder.Name = request.Name;
         }
 
+        folder.UpdatedAt = DateTimeOffset.UtcNow;
+        folder.UpdatedBy = userId.Value;
+
         await _context.SaveChangesAsync();
 
         var noteCount = await _context.Notes.CountAsync(n => n.FolderId == folder.Id && n.UserId == userId && !n.IsDeleted);
@@ -94,7 +103,7 @@ public class FoldersController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteFolder(int id)
+    public async Task<ActionResult> DeleteFolder(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -119,7 +128,7 @@ public class FoldersController : ControllerBase
     }
 
     [HttpPut("reorder")]
-    public async Task<ActionResult> ReorderFolders([FromBody] List<int> folderIds)
+    public async Task<ActionResult> ReorderFolders([FromBody] List<long> folderIds)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -139,7 +148,7 @@ public class FoldersController : ControllerBase
     }
 
     [HttpPut("{id}/pin")]
-    public async Task<ActionResult<FolderResponse>> TogglePin(int id)
+    public async Task<ActionResult<FolderResponse>> TogglePin(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -159,10 +168,10 @@ public class FoldersController : ControllerBase
         return Ok(new FolderResponse(message, new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned)));
     }
 
-    private int? GetUserId()
+    private long? GetUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim != null && int.TryParse(userIdClaim, out var userId))
+        if (userIdClaim != null && long.TryParse(userIdClaim, out var userId))
         {
             return userId;
         }

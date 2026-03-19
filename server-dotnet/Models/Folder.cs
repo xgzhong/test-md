@@ -7,11 +7,11 @@ namespace server_dotnet.Models;
 public class Folder
 {
     [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
+    public long Id { get; set; }
 
     [Required]
-    public int UserId { get; set; }
+    public long UserId { get; set; }
 
     [Required]
     [MaxLength(100)]
@@ -21,9 +21,18 @@ public class Folder
 
     public bool IsPinned { get; set; } = false;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public long? CreatedBy { get; set; }
+
+    public long? UpdatedBy { get; set; }
+
+    /// <summary>
+    /// 数据版本：雪花ID，用于记录版本
+    /// </summary>
+    public long Version { get; set; } = 0;
 
     // Navigation properties
     [ForeignKey("UserId")]

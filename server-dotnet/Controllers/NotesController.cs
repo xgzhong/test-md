@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
+using Yitter.IdGenerator;
 
 namespace server_dotnet.Controllers;
 
@@ -26,14 +27,14 @@ public class NotesController : ControllerBase
         if (userId == null) return Unauthorized();
 
         // 处理 folderId 字符串参数
-        int? parsedFolderId = null;
+        long? parsedFolderId = null;
         if (!string.IsNullOrEmpty(folderId))
         {
             if (folderId == "null")
             {
                 parsedFolderId = null; // 未分类
             }
-            else if (int.TryParse(folderId, out int fid))
+            else if (long.TryParse(folderId, out long fid))
             {
                 parsedFolderId = fid;
             }
@@ -74,7 +75,7 @@ public class NotesController : ControllerBase
                 n.Content,
                 n.IsShared,
                 n.ShareToken,
-                n.DataVersion,
+                n.Version,
                 n.CreatedAt,
                 n.UpdatedAt
             ))
@@ -84,7 +85,7 @@ public class NotesController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<NoteResponse>> GetNote(int id)
+    public async Task<ActionResult<NoteResponse>> GetNote(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -107,7 +108,7 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
-            note.DataVersion,
+            note.Version,
             note.CreatedAt,
             note.UpdatedAt
         )));
@@ -121,23 +122,33 @@ public class NotesController : ControllerBase
 
         var note = new server_dotnet.Models.Note
         {
+            Id = YitIdHelper.NextId(),
             UserId = userId.Value,
             Title = request.Title ?? "无标题笔记",
             Content = request.Content ?? "",
-            FolderId = request.FolderId
+            FolderId = request.FolderId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = userId.Value,
+            UpdatedBy = userId.Value,
+            Version = YitIdHelper.NextId()
         };
 
         _context.Notes.Add(note);
         await _context.SaveChangesAsync();
 
         // Create initial version
-        var version = new server_dotnet.Models.NoteVersion
+        var noteVersion = new server_dotnet.Models.NoteVersion
         {
+            Id = YitIdHelper.NextId(),
             NoteId = note.Id,
             Title = note.Title,
-            Content = note.Content
+            Content = note.Content,
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = userId.Value,
+            Version = YitIdHelper.NextId()
         };
-        _context.NoteVersions.Add(version);
+        _context.NoteVersions.Add(noteVersion);
         await _context.SaveChangesAsync();
 
         return StatusCode(201, new NoteResponse("笔记创建成功", new NoteDto(
@@ -148,14 +159,14 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
-            note.DataVersion,
+            note.Version,
             note.CreatedAt,
             note.UpdatedAt
         )));
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<NoteResponse>> UpdateNote(int id, [FromBody] UpdateNoteRequest request)
+    public async Task<ActionResult<NoteResponse>> UpdateNote(long id, [FromBody] UpdateNoteRequest request)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -169,21 +180,27 @@ public class NotesController : ControllerBase
         // 只有手动点击保存版本按钮时才保存版本历史
         if (request.SaveVersion)
         {
-            var version = new server_dotnet.Models.NoteVersion
+            var versionRecord = new server_dotnet.Models.NoteVersion
             {
+                Id = YitIdHelper.NextId(),
                 NoteId = note.Id,
                 Title = note.Title,
-                Content = note.Content
+                Content = note.Content,
+                CreatedAt = DateTimeOffset.UtcNow,
+                CreatedBy = userId.Value,
+                Version = YitIdHelper.NextId()
             };
-            _context.NoteVersions.Add(version);
+            _context.NoteVersions.Add(versionRecord);
         }
 
         if (request.Title != null) note.Title = request.Title;
         if (request.Content != null) note.Content = request.Content;
         if (request.FolderId != null) note.FolderId = request.FolderId == -1 ? null : request.FolderId;
 
-        // 每次保存都递增数据版本
-        note.DataVersion += 1;
+        // 每次保存都更新版本号为新的雪花ID
+        note.Version = YitIdHelper.NextId();
+        note.UpdatedAt = DateTimeOffset.UtcNow;
+        note.UpdatedBy = userId.Value;
 
         await _context.SaveChangesAsync();
 
@@ -197,14 +214,14 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
-            note.DataVersion,
+            note.Version,
             note.CreatedAt,
             note.UpdatedAt
         )));
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteNote(int id)
+    public async Task<ActionResult> DeleteNote(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -223,7 +240,7 @@ public class NotesController : ControllerBase
     }
 
     [HttpPost("{id}/share")]
-    public async Task<ActionResult<ShareResponse>> ShareNote(int id)
+    public async Task<ActionResult<ShareResponse>> ShareNote(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -242,7 +259,7 @@ public class NotesController : ControllerBase
     }
 
     [HttpPost("{id}/unshare")]
-    public async Task<ActionResult> UnshareNote(int id)
+    public async Task<ActionResult> UnshareNote(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -261,7 +278,7 @@ public class NotesController : ControllerBase
     }
 
     [HttpGet("{id}/versions")]
-    public async Task<ActionResult<VersionsResponse>> GetVersions(int id)
+    public async Task<ActionResult<VersionsResponse>> GetVersions(long id)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -283,7 +300,7 @@ public class NotesController : ControllerBase
     }
 
     [HttpPost("{id}/restore/{versionId}")]
-    public async Task<ActionResult<NoteResponse>> RestoreVersion(int id, int versionId)
+    public async Task<ActionResult<NoteResponse>> RestoreVersion(long id, long versionId)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -301,17 +318,24 @@ public class NotesController : ControllerBase
         }
 
         // Save current version
-        var currentVersion = new server_dotnet.Models.NoteVersion
+        var currentVersionRecord = new server_dotnet.Models.NoteVersion
         {
+            Id = YitIdHelper.NextId(),
             NoteId = note.Id,
             Title = note.Title,
-            Content = note.Content
+            Content = note.Content,
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = userId.Value,
+            Version = YitIdHelper.NextId()
         };
-        _context.NoteVersions.Add(currentVersion);
+        _context.NoteVersions.Add(currentVersionRecord);
 
         // Restore
         note.Title = version.Title;
         note.Content = version.Content;
+        note.UpdatedAt = DateTimeOffset.UtcNow;
+        note.UpdatedBy = userId.Value;
+        note.Version = YitIdHelper.NextId();
         await _context.SaveChangesAsync();
 
         var folder = note.FolderId.HasValue ? await _context.Folders.FindAsync(note.FolderId) : null;
@@ -324,14 +348,14 @@ public class NotesController : ControllerBase
             note.Content,
             note.IsShared,
             note.ShareToken,
-            note.DataVersion,
+            note.Version,
             note.CreatedAt,
             note.UpdatedAt
         )));
     }
 
     [HttpDelete("{id}/versions/{versionId}")]
-    public async Task<ActionResult> DeleteVersion(int id, int versionId)
+    public async Task<ActionResult> DeleteVersion(long id, long versionId)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
@@ -355,10 +379,10 @@ public class NotesController : ControllerBase
         return Ok(new { message = "版本删除成功" });
     }
 
-    private int? GetUserId()
+    private long? GetUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim != null && int.TryParse(userIdClaim, out var userId))
+        if (userIdClaim != null && long.TryParse(userIdClaim, out var userId))
         {
             return userId;
         }

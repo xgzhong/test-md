@@ -7,11 +7,11 @@ namespace server_dotnet.Models;
 public class NoteVersion
 {
     [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
+    public long Id { get; set; }
 
     [Required]
-    public int NoteId { get; set; }
+    public long NoteId { get; set; }
 
     [Required]
     [MaxLength(255)]
@@ -22,7 +22,14 @@ public class NoteVersion
     [Required]
     public bool IsDeleted { get; set; } = false;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public long? CreatedBy { get; set; }
+
+    /// <summary>
+    /// 数据版本：雪花ID，用于记录版本
+    /// </summary>
+    public long Version { get; set; } = 0;
 
     // Navigation properties
     [ForeignKey("NoteId")]

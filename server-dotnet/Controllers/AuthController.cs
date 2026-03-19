@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
 using BCrypt.Net;
+using Yitter.IdGenerator;
 
 namespace server_dotnet.Controllers;
 
@@ -41,12 +42,20 @@ public class AuthController : ControllerBase
 
         var user = new server_dotnet.Models.User
         {
+            Id = YitIdHelper.NextId(),
             Username = request.Username,
             Email = request.Email,
-            Password = hashedPassword
+            Password = hashedPassword,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
         };
 
         _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        // 注册时设置 CreatedBy 和 UpdatedBy
+        user.CreatedBy = user.Id;
+        user.UpdatedBy = user.Id;
         await _context.SaveChangesAsync();
 
         var token = GenerateToken(user.Id);
@@ -104,7 +113,7 @@ public class AuthController : ControllerBase
         return Ok(new UserResponse(new UserDto(user.Id, user.Username, user.Email)));
     }
 
-    private string GenerateToken(int userId)
+    private string GenerateToken(long userId)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"] ?? "markdown-notes-secret-key-2024"));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -123,10 +132,10 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private int? GetUserId()
+    private long? GetUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim != null && int.TryParse(userIdClaim, out var userId))
+        if (userIdClaim != null && long.TryParse(userIdClaim, out var userId))
         {
             return userId;
         }

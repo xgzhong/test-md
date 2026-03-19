@@ -1,0 +1,24 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace server_dotnet.Converters;
+
+public class DateTimeOffsetConverter : JsonConverter<DateTimeOffset>
+{
+    public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            if (DateTimeOffset.TryParse(reader.GetString(), out DateTimeOffset value))
+            {
+                return value;
+            }
+        }
+        return reader.GetDateTimeOffset();
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("yyyy-MM-dd HH:mm:ss"));
+    }
+}
