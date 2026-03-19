@@ -72,6 +72,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Enable static file serving from wwwroot
+app.UseStaticFiles();
+
 // Enable CORS
 app.UseCors("AllowAll");
 
