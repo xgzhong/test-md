@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Home from '../views/Home.vue'
-import NoteEditor from '../views/NoteEditor.vue'
+import NoteEditorVditor from '../views/NoteEditorVditor.vue'
 import Shared from '../views/Shared.vue'
 
 const routes = [
@@ -29,7 +29,7 @@ const routes = [
   {
     path: '/note/:id',
     name: 'NoteEditor',
-    component: NoteEditor,
+    component: NoteEditorVditor,
     meta: { requiresAuth: true }
   },
   {

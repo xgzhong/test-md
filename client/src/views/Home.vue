@@ -1,68 +1,20 @@
 <template>
   <div class="main-layout">
     <!-- 侧边栏 -->
-    <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div class="sidebar-header">
-        <h2 v-if="!sidebarCollapsed">Markdown 笔记</h2>
-      </div>
-      <!-- 折叠按钮 -->
-      <div class="sidebar-toggle" @click="toggleSidebar">
-        <el-icon v-if="sidebarCollapsed"><Expand /></el-icon>
-        <el-icon v-else><Fold /></el-icon>
-      </div>
-      <div class="sidebar-menu" v-show="!sidebarCollapsed">
-        <div
-          class="menu-item"
-          :class="{ active: currentFolder === null }"
-          @click="selectFolder(null)"
-        >
-          <span class="menu-item-text">全部笔记</span>
-          <el-tag size="small">{{ totalNotes }}</el-tag>
-        </div>
-        <div
-          class="menu-item"
-          :class="{ active: currentFolder === 'uncategorized' }"
-          @click="selectFolder('uncategorized')"
-        >
-          <span class="menu-item-text">未分类</span>
-          <el-tag size="small">{{ uncategorizedCount }}</el-tag>
-        </div>
-
-        <div class="sidebar-section-header">
-          <span class="sidebar-section-title">分类</span>
-          <el-button class="add-folder-btn" size="small" text @click="showFolderDialog = true">
-            <el-icon><Plus /></el-icon>
-          </el-button>
-        </div>
-
-        <div class="folder-list">
-          <div
-            v-for="(folder, index) in folders"
-            :key="folder.id"
-            class="folder-item"
-            :class="{ active: currentFolder === folder.id, pinned: folder.isPinned }"
-            draggable="true"
-            @click="selectFolder(folder.id)"
-            @dragstart="onDragStart($event, index)"
-            @dragover.prevent="onDragOver($event, index)"
-            @drop="onDrop($event, index)"
-          >
-            <el-icon v-if="folder.isPinned" class="folder-pin-icon"><Star /></el-icon>
-            <span v-else class="folder-index">{{ index + 1 }}.</span>
-            <el-tooltip :content="folder.name" placement="top" :disabled="folder.name.length <= 10">
-              <span class="folder-name">{{ folder.name }}</span>
-            </el-tooltip>
-            <el-tag size="small">{{ folder.noteCount }}</el-tag>
-            <el-icon class="folder-pin-btn" @click.stop="togglePinFolder(folder)">
-              <span v-if="folder.isPinned">&#x2605;</span>
-              <span v-else>&#x2606;</span>
-            </el-icon>
-            <el-icon class="folder-edit-icon" @click.stop="editFolderName(folder)"><Edit /></el-icon>
-            <el-icon class="folder-delete-icon" @click.stop="confirmDeleteFolder(folder)"><Delete /></el-icon>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Sidebar
+      :collapsed="sidebarCollapsed"
+      :folders="folders"
+      :currentFolder="currentFolder"
+      :totalNotes="totalNotes"
+      :uncategorizedCount="uncategorizedCount"
+      @toggle="toggleSidebar"
+      @select="selectFolder"
+      @addFolder="showFolderDialog = true"
+      @pin="togglePinFolder"
+      @edit="editFolderName"
+      @delete="confirmDeleteFolder"
+      @drop="onDrop"
+    />
 
     <!-- 主内容区 -->
     <div class="main-content">
@@ -195,6 +147,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Document, Delete, Star, Fold, Expand, Edit } from '@element-plus/icons-vue'
 import { notesAPI, foldersAPI } from '../api'
+import Sidebar from '../components/Sidebar.vue'
 
 const router = useRouter()
 

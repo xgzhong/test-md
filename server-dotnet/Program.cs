@@ -73,6 +73,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Enable static file serving from wwwroot
+app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // Enable CORS
@@ -84,8 +85,15 @@ app.UseAuthorization();
 // Map routes
 app.MapControllers();
 
-// Root endpoint
-app.MapGet("/", () => new { message = "Markdown Notes API Server", version = "1.0.0" });
+// SPA Fallback - serve index.html for non-API routes
+app.MapFallbackToFile("index.html");
+
+// Root endpoint - serve index.html for SPA
+app.MapGet("/", async (HttpContext context) =>
+{
+    context.Response.ContentType = "text/html";
+    await context.Response.SendFileAsync("wwwroot/index.html");
+});
 
 // Initialize database
 using (var scope = app.Services.CreateScope())

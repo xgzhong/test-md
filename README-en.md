@@ -11,11 +11,12 @@ A web-based Markdown note-taking application with note categorization, version h
 - **Category Management** - Organize notes into folders with drag-and-drop sorting, pinning, and name editing
 - **Version History** - Manual save version history with restore and delete support
 - **Note Sharing** - Generate share links for others to view
-- **Markdown Preview** - Real-time Markdown content preview
-- **Sidebar** - Collapsible sidebar
+- **Markdown Editor** - WYSIWYG editor using Vditor
+- **Sidebar** - Collapsible sidebar with reusable component
 - **Work Log** - Auto-generate monthly work log template
 - **Snowflake ID** - Distributed ID generation using Yitter.IdGenerator
-- **Data Version** - Every record includes Version, CreatedBy, UpdatedBy audit fields
+- **Data Version** - Version field for version control on each record
+- **Code Refactoring** - State management using reactive objects, component-based design
 
 ## Tech Stack
 
@@ -30,7 +31,7 @@ A web-based Markdown note-taking application with note categorization, version h
 
 ### Backend
 
-- ASP.NET Core 10.0
+- ASP.NET Core 9.0
 - Entity Framework Core
 - MySQL
 - JWT Authentication
@@ -44,11 +45,14 @@ test-md/
 ├── client/                      # Frontend (Vue 3)
 │   ├── src/
 │   │   ├── api/               # API client
+│   │   ├── components/         # Reusable components
+│   │   │   └── Sidebar.vue    # Sidebar component
 │   │   ├── views/             # Page components
 │   │   │   ├── Login.vue      # Login page
 │   │   │   ├── Register.vue    # Registration page
 │   │   │   ├── Home.vue        # Notes list home page
-│   │   │   ├── NoteEditor.vue  # Markdown editor
+│   │   │   ├── NoteEditor.vue  # Markdown editor (legacy)
+│   │   │   ├── NoteEditorVditor.vue # Markdown editor (Vditor)
 │   │   │   └── Shared.vue      # Shared note page
 │   │   ├── router/            # Router configuration
 │   │   ├── main.js            # Entry file

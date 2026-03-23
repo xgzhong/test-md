@@ -11,11 +11,12 @@
 - **分类管理** - 文件夹分类整理，支持拖拽排序、置顶、编辑名称
 - **历史版本** - 手动保存版本历史，支持版本回溯和删除
 - **笔记分享** - 生成分享链接他人查看
-- **Markdown 渲染** - 实时预览 Markdown 内容
-- **侧边栏** - 支持折叠和展开
+- **Markdown 编辑器** - 使用 Vditor 实现所见即所得编辑
+- **侧边栏** - 支持折叠和展开，可复用组件
 - **工作日志** - 自动生成当月工作日志模板
 - **雪花ID** - 使用 Yitter.IdGenerator 生成分布式 ID
-- **数据版本** - 每条记录包含 Version、CreatedBy、UpdatedBy 审计字段
+- **数据版本** - 每条记录包含 Version 字段用于版本控制
+- **代码重构** - 使用 reactive 对象封装状态，组件化设计
 
 ## 技术栈
 
@@ -30,7 +31,7 @@
 
 ### 后端
 
-- ASP.NET Core 10.0
+- ASP.NET Core 9.0
 - Entity Framework Core
 - MySQL
 - JWT 认证
@@ -44,11 +45,14 @@ test-md/
 ├── client/                      # 前端项目 (Vue 3)
 │   ├── src/
 │   │   ├── api/                 # API 请求封装
+│   │   ├── components/           # 可复用组件
+│   │   │   └── Sidebar.vue       # 侧边栏组件
 │   │   ├── views/               # 页面组件
 │   │   │   ├── Login.vue        # 登录页面
 │   │   │   ├── Register.vue      # 注册页面
 │   │   │   ├── Home.vue         # 笔记列表主页
-│   │   │   ├── NoteEditor.vue    # Markdown 编辑器
+│   │   │   ├── NoteEditor.vue    # Markdown 编辑器 (旧版)
+│   │   │   ├── NoteEditorVditor.vue # Markdown 编辑器 (Vditor版)
 │   │   │   └── Shared.vue        # 分享笔记页面
 │   │   ├── router/              # 路由配置
 │   │   ├── main.js              # 入口文件
@@ -58,7 +62,7 @@ test-md/
 │   ├── package.json
 │   └── vite.config.js           # Vite 配置
 │
-├── server-dotnet/               # 后端项目 (.NET 10.0)
+├── server-dotnet/               # 后端项目 (.NET 9.0)
 │   ├── Controllers/             # API 控制器
 │   │   ├── AuthController.cs     # 认证接口
 │   │   ├── NotesController.cs     # 笔记接口
@@ -121,7 +125,7 @@ API 返回格式：
 
 - Node.js 18+
 - pnpm 9+
-- .NET SDK 10.0+
+- .NET SDK 9.0+
 - MySQL 5.7+
 
 ### 安装
