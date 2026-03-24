@@ -32,6 +32,11 @@ public class AppDbContext : DbContext
                 .WithMany(u => u.Folders)
                 .HasForeignKey(f => f.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // 性能优化：添加索引
+            entity.HasIndex(f => f.ParentId);
+            entity.HasIndex(f => new { f.UserId, f.IsPinned });
+            entity.HasIndex(f => new { f.UserId, f.SortOrder });
         });
 
         // Note configurations
@@ -48,6 +53,11 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(n => n.ShareToken);
+
+            // 性能优化：添加复合索引
+            entity.HasIndex(n => new { n.FolderId, n.UserId, n.IsDeleted });
+            entity.HasIndex(n => new { n.UserId, n.IsDeleted });
+            entity.HasIndex(n => n.UpdatedAt);
         });
 
         // NoteVersion configurations

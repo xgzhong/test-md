@@ -17,10 +17,10 @@ public record ShareResponse(string Message, string ShareUrl);
 public record VersionsResponse(List<NoteVersionDto> Versions);
 
 // Folder DTOs
-public record FolderDto(long Id, string Name, int NoteCount, int SortOrder = 0, bool IsPinned = false);
+public record FolderDto(long Id, string Name, int NoteCount, int SortOrder = 0, bool IsPinned = false, long ParentId = 0, List<FolderDto>? Children = null);
 public record FoldersResponse(List<FolderDto> Folders, int UncategorizedCount);
-public record CreateFolderRequest(string Name);
-public record UpdateFolderRequest(string Name);
+public record CreateFolderRequest(string Name, string? ParentId = null);
+public record UpdateFolderRequest(string? Name = null, string? ParentId = null);
 public record FolderResponse(string Message, FolderDto? Folder = null);
 
 // Shared DTOs

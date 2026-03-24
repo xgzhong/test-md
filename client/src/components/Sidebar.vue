@@ -38,32 +38,32 @@
         </el-button>
       </div>
 
-      <!-- 分类列表 -->
-      <div class="folder-list">
-        <div
-          v-for="(folder, index) in folders"
-          :key="folder.id"
-          class="folder-item"
-          :class="{ active: currentFolder === folder.id, pinned: folder.isPinned }"
-          draggable="true"
-          @click="$emit('select', folder.id)"
-          @dragstart="onDragStart($event, index)"
-          @dragover.prevent="onDragOver($event, index)"
-          @drop="onDrop($event, index)"
-        >
-          <el-icon v-if="folder.isPinned" class="folder-pin-icon"><Star /></el-icon>
-          <span v-else class="folder-index">{{ index + 1 }}.</span>
-          <el-tooltip :content="folder.name" placement="top" :disabled="folder.name.length <= 10">
-            <span class="folder-name">{{ folder.name }}</span>
-          </el-tooltip>
-          <el-tag v-if="folder.noteCount !== undefined" size="small">{{ folder.noteCount }}</el-tag>
-          <el-icon v-if="showPin" class="folder-pin-btn" @click.stop="$emit('pin', folder)">
-            <span v-if="folder.isPinned">&#x2605;</span>
-            <span v-else>&#x2606;</span>
-          </el-icon>
-          <el-icon v-if="showEdit" class="folder-edit-icon" @click.stop="$emit('edit', folder)"><Edit /></el-icon>
-          <el-icon v-if="showDelete" class="folder-delete-icon" @click.stop="$emit('delete', folder)"><Delete /></el-icon>
-        </div>
+      <!-- 分类列表（树形结构） -->
+      <div class="folder-list" @dragover.prevent @drop="onDropToRoot">
+        <template v-for="folder in folders" :key="folder.id">
+          <FolderTreeItem
+            :folder="folder"
+            :currentFolder="currentFolder"
+            :level="0"
+            :expandedKeys="expandedKeys"
+            :showMore="true"
+            :dragOverFolder="dragOverFolder"
+            :draggedFolder="draggedFolder"
+            :hoverSide="hoverSide"
+            :hoverPosition="hoverPosition"
+            @select="$emit('select', $event)"
+            @toggleExpand="toggleExpand"
+            @pin="$emit('pin', $event)"
+            @edit="$emit('edit', $event)"
+            @delete="$emit('delete', $event)"
+            @addChildFolder="$emit('addChildFolder', $event)"
+            @addNote="$emit('addNote', $event)"
+            @dragStart="onDragStart"
+            @dragOver="onDragOver"
+            @drag-leave="onDragLeave"
+            @drop="onDrop"
+          />
+        </template>
       </div>
     </div>
   </div>
@@ -71,6 +71,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import FolderTreeItem from './FolderTreeItem.vue'
 
 const props = defineProps({
   title: {
@@ -101,17 +102,25 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
-  showPin: {
-    type: Boolean,
-    default: true
+  draggedFolder: {
+    type: Object,
+    default: null
   },
-  showEdit: {
-    type: Boolean,
-    default: true
+  dragOverFolder: {
+    type: Object,
+    default: null
   },
-  showDelete: {
+  isLevelChange: {
     type: Boolean,
-    default: true
+    default: false
+  },
+  hoverSide: {
+    type: String,
+    default: 'child'
+  },
+  hoverPosition: {
+    type: String,
+    default: 'below'
   }
 })
 
@@ -124,23 +133,41 @@ const emit = defineEmits([
   'delete',
   'dragStart',
   'dragOver',
+  'dragleave',
   'drop'
 ])
 
-const draggedIndex = ref(null)
+// 展开状态 - 使用对象替代 Set 以便 Vue 更好地追踪变化
+const expandedKeys = ref({})
 
-const onDragStart = (event, index) => {
-  draggedIndex.value = index
+const toggleExpand = (folderId) => {
+  expandedKeys.value = {
+    ...expandedKeys.value,
+    [folderId]: !expandedKeys.value[folderId]
+  }
+}
+
+const onDragStart = (event, folder) => {
+  emit('dragStart', event, folder)
   event.dataTransfer.effectAllowed = 'move'
 }
 
-const onDragOver = (event, index) => {
+const onDragOver = (event, folder) => {
+  emit('dragOver', event, folder)
   event.dataTransfer.dropEffect = 'move'
 }
 
-const onDrop = (event, index) => {
-  emit('drop', draggedIndex.value, index)
-  draggedIndex.value = null
+const onDragLeave = () => {
+  emit('dragleave')
+}
+
+const onDrop = (event, targetFolder) => {
+  emit('drop', event, targetFolder)
+}
+
+// 拖拽到根区域
+const onDropToRoot = (event) => {
+  emit('drop', event, null)
 }
 </script>
 
@@ -280,33 +307,5 @@ const onDrop = (event, index) => {
 .folder-pin-icon {
   color: #e6a23c;
   margin-right: 5px;
-}
-
-.folder-pin-btn,
-.folder-edit-icon,
-.folder-delete-icon {
-  margin-left: 5px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s;
-  color: #909399;
-}
-
-.folder-item:hover .folder-pin-btn,
-.folder-item:hover .folder-edit-icon,
-.folder-item:hover .folder-delete-icon {
-  opacity: 1;
-}
-
-.folder-pin-btn:hover {
-  color: #e6a23c;
-}
-
-.folder-edit-icon:hover {
-  color: #409eff;
-}
-
-.folder-delete-icon:hover {
-  color: #f56c6c;
 }
 </style>

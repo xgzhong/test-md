@@ -19,6 +19,8 @@ public class Folder
 
     public int SortOrder { get; set; } = 0;
 
+    public long ParentId { get; set; } = 0;
+
     public bool IsPinned { get; set; } = false;
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -37,6 +39,11 @@ public class Folder
     // Navigation properties
     [ForeignKey("UserId")]
     public User? User { get; set; }
+
+    [ForeignKey("ParentId")]
+    public Folder? Parent { get; set; }
+
+    public ICollection<Folder> Children { get; set; } = new List<Folder>();
 
     public ICollection<Note> Notes { get; set; } = new List<Note>();
 }
