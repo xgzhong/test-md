@@ -32,9 +32,19 @@
 
       <!-- 分类标题 -->
       <div class="sidebar-section-header">
-        <span class="sidebar-section-title">分类</span>
-        <el-button v-if="showAddFolder" class="add-folder-btn" size="small" text @click="$emit('addFolder')">
+        <div class="section-title-group">
+          <el-icon class="section-title-icon"><Folder /></el-icon>
+          <span class="sidebar-section-title">分类</span>
+        </div>
+        <el-button
+          v-if="showAddFolder"
+          class="add-folder-btn"
+          text
+          size="small"
+          @click="$emit('addFolder')"
+        >
           <el-icon><Plus /></el-icon>
+          <span>新增分类</span>
         </el-button>
       </div>
 
@@ -43,6 +53,7 @@
         <template v-for="folder in folders" :key="folder.id">
           <FolderTreeItem
             :folder="folder"
+            :notes="notes"
             :currentFolder="currentFolder"
             :level="0"
             :expandedKeys="expandedKeys"
@@ -52,6 +63,7 @@
             :hoverSide="hoverSide"
             :hoverPosition="hoverPosition"
             @select="$emit('select', $event)"
+            @openNote="$emit('openNote', $event)"
             @toggleExpand="toggleExpand"
             @pin="$emit('pin', $event)"
             @edit="$emit('edit', $event)"
@@ -83,6 +95,10 @@ const props = defineProps({
     default: false
   },
   folders: {
+    type: Array,
+    default: () => []
+  },
+  notes: {
     type: Array,
     default: () => []
   },
@@ -174,12 +190,14 @@ const onDropToRoot = (event) => {
 <style scoped>
 .sidebar {
   width: 380px;
+  height: 100%;
   background: #f5f7fa;
   border-right: 1px solid #e4e7ed;
   display: flex;
   flex-direction: column;
   transition: width 0.3s;
   position: relative;
+  overflow: hidden;
 }
 
 .sidebar.collapsed {
@@ -216,6 +234,7 @@ const onDropToRoot = (event) => {
 
 .sidebar-menu {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 0;
 }
@@ -258,8 +277,31 @@ const onDropToRoot = (event) => {
   font-size: 14px;
 }
 
+.section-title-icon {
+  margin-right: 6px;
+  color: #909399;
+  font-size: 14px;
+}
+
+.section-title-group {
+  display: flex;
+  align-items: center;
+}
+
 .add-folder-btn {
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #909399;
+  transition: all 0.2s ease;
+}
+
+.add-folder-btn:hover {
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.1);
 }
 
 .folder-list {

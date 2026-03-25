@@ -120,7 +120,19 @@ dotnet restore
 CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. **后端配置** (`server-dotnet/appsettings.json`):
+2. **环境变量配置** - 复制 `.env.example` 为 `.env` 并配置：
+
+```bash
+cd server-dotnet
+cp .env.example .env
+```
+
+主要配置项：
+- `DB_CONNECTION_STRING` - 数据库连接字符串
+- `JWT_SECRET` - JWT 密钥（生产环境请使用足够长度的随机字符串）
+- `ASPNETCORE_ENVIRONMENT` - 运行环境 (Development/Production)
+
+3. **后端配置** (`server-dotnet/appsettings.json`)：
 
 ```json
 {
@@ -150,12 +162,21 @@ pnpm dev
 # 前端运行在 http://localhost:5173
 ```
 
+### 初始化数据库
+
+首次运行后，端点 `/api/init` 可用于初始化数据库表结构（如果使用 EF Core migrations）。
+
 ### 构建生产版本
 
 ```bash
 # 前端构建
 cd client
 pnpm build
+# 构建产物在 client/dist 目录
+
+# 后端发布
+cd server-dotnet
+dotnet publish -c Release
 ```
 
 ## API 接口
@@ -225,6 +246,26 @@ pnpm build
 API 返回格式：
 - `long` 类型 ID 以字符串形式返回（如 `"id": "785339216482373"`）
 - `DateTime` 以 `yyyy-MM-dd HH:mm:ss` 格式返回
+
+## 截图
+
+> 截图将在后续版本中添加
+
+主要界面：
+- **笔记列表** - 展示所有笔记，支持搜索和分类筛选
+- **分类管理** - 树形结构展示，支持拖拽排序和层级调整
+- **Markdown 编辑器** - Vditor 所见即所得编辑
+- **笔记分享** - 一键生成分享链接
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
 
 ## 许可证
 

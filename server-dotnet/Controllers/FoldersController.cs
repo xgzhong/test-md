@@ -11,7 +11,7 @@ namespace server_dotnet.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class FoldersController : ControllerBase
+public class FoldersController : BaseController
 {
     private readonly AppDbContext _context;
 
@@ -183,22 +183,24 @@ public class FoldersController : ControllerBase
             return NotFound(new { error = "分类不存在" });
         }
 
-        // Get all child folders recursively
-        async Task<List<server_dotnet.Models.Folder>> GetAllChildren(long parentId)
+        // 优化：一次性获取所有文件夹，避免递归 N+1 查询
+        var allFolders = await _context.Folders.Where(f => f.UserId == userId).ToListAsync();
+        var foldersToDelete = new List<server_dotnet.Models.Folder> { folder };
+
+        // 递归收集所有子文件夹（内存中处理）
+        void CollectChildren(long parentId)
         {
-            var children = await _context.Folders.Where(f => f.ParentId == parentId).ToListAsync();
-            var result = new List<server_dotnet.Models.Folder>(children);
+            var children = allFolders.Where(f => f.ParentId == parentId).ToList();
             foreach (var child in children)
             {
-                result.AddRange(await GetAllChildren(child.Id));
+                foldersToDelete.Add(child);
+                CollectChildren(child.Id);
             }
-            return result;
         }
 
-        var allFoldersToDelete = new List<server_dotnet.Models.Folder> { folder };
-        allFoldersToDelete.AddRange(await GetAllChildren(folder.Id));
+        CollectChildren(folder.Id);
 
-        var folderIdsToDelete = allFoldersToDelete.Select(f => f.Id).ToHashSet();
+        var folderIdsToDelete = foldersToDelete.Select(f => f.Id).ToHashSet();
 
         // Move notes to uncategorized
         var notes = await _context.Notes.Where(n => folderIdsToDelete.Contains(n.FolderId ?? 0)).ToListAsync();
@@ -207,7 +209,7 @@ public class FoldersController : ControllerBase
             note.FolderId = null;
         }
 
-        _context.Folders.RemoveRange(allFoldersToDelete);
+        _context.Folders.RemoveRange(foldersToDelete);
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "分类删除成功" });
@@ -252,15 +254,5 @@ public class FoldersController : ControllerBase
 
         var message = folder.IsPinned ? "置顶成功" : "取消置顶成功";
         return Ok(new FolderResponse(message, new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned, folder.ParentId)));
-    }
-
-    private long? GetUserId()
-    {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim != null && long.TryParse(userIdClaim, out var userId))
-        {
-            return userId;
-        }
-        return null;
     }
 }

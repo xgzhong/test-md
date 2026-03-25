@@ -1,6 +1,6 @@
 <template>
   <div class="folder-tree-item">
-    <!-- 放置指示线 - 显示在同级分类的上方（放在当前元素之前） -->
+    <!-- 放置指示线 - 显示在同级分类的上方 -->
     <div v-if="isDragOver && hoverSide === 'sibling' && isAbove" class="drop-indicator"></div>
 
     <div
@@ -18,27 +18,24 @@
       @drop="onDrop($event, folder)"
     >
       <!-- 展开/折叠按钮 -->
-      <el-icon
-        v-if="folder.children && folder.children.length > 0"
-        class="folder-expand-icon"
-        @click.stop="handleClick"
-      >
+      <el-icon class="folder-expand-icon" @click.stop="handleClick">
         <ArrowRight v-if="!isExpanded" />
         <ArrowDown v-else />
       </el-icon>
-      <span v-else class="folder-expand-placeholder"></span>
 
       <el-icon v-if="folder.isPinned" class="folder-pin-icon"><Star /></el-icon>
+      <el-icon v-else class="folder-icon"><Folder /></el-icon>
       <el-tooltip :content="folder.name" placement="top" :disabled="folder.name.length <= 10">
         <span class="folder-name">{{ folder.name }}</span>
       </el-tooltip>
-      <el-tag v-if="folder.noteCount !== undefined" size="small">{{ folder.noteCount }}</el-tag>
 
       <!-- 更多操作下拉菜单 -->
-      <el-dropdown trigger="click" @command="handleCommand" v-if="showMore">
-        <el-icon class="folder-more-icon">
-          <MoreFilled />
-        </el-icon>
+      <el-dropdown trigger="click" @command="handleCommand" v-if="showMore" @click.stop>
+        <span class="folder-more-trigger">
+          <el-icon class="folder-more-icon">
+            <MoreFilled />
+          </el-icon>
+        </span>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item :command="'addChildFolder'">
@@ -64,9 +61,12 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
+
+      <!-- 笔记数量 -->
+      <el-tag v-if="folder.noteCount !== undefined" size="small" class="folder-note-count">{{ folder.noteCount }}</el-tag>
     </div>
 
-    <!-- 放置指示线 - 显示在同级分类的下方（放在当前元素之后） -->
+    <!-- 放置指示线 - 显示在同级分类的下方 -->
     <div v-if="isDragOver && hoverSide === 'sibling' && !isAbove" class="drop-indicator"></div>
 
     <!-- 子分类 -->
@@ -75,6 +75,7 @@
         v-for="child in folder.children"
         :key="child.id"
         :folder="child"
+        :notes="notes"
         :currentFolder="currentFolder"
         :level="level + 1"
         :expandedKeys="expandedKeys"
@@ -83,6 +84,7 @@
         :hoverSide="hoverSide"
         :hoverPosition="hoverPosition"
         @select="$emit('select', $event)"
+        @openNote="$emit('openNote', $event)"
         @toggleExpand="$emit('toggleExpand', $event)"
         @pin="$emit('pin', $event)"
         @edit="$emit('edit', $event)"
@@ -95,6 +97,21 @@
         @drop="$emit('drop', $event, child)"
       />
     </template>
+
+    <!-- 该分类下的笔记列表 -->
+    <template v-if="isExpanded && folderNotes.length > 0">
+      <div
+        v-for="note in folderNotes"
+        :key="note.id"
+        class="note-item"
+        :class="{ active: currentNoteId === note.id }"
+        :style="{ paddingLeft: (level * 20 + 36) + 'px' }"
+        @click.stop="$emit('openNote', note.id)"
+      >
+        <el-icon class="note-icon"><Document /></el-icon>
+        <span class="note-title">{{ note.title || '无标题笔记' }}</span>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -105,6 +122,10 @@ const props = defineProps({
   folder: {
     type: Object,
     required: true
+  },
+  notes: {
+    type: Array,
+    default: () => []
   },
   currentFolder: {
     type: [Number, String, null],
@@ -142,6 +163,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'select',
+  'openNote',
   'toggleExpand',
   'pin',
   'edit',
@@ -154,15 +176,21 @@ const emit = defineEmits([
   'drop'
 ])
 
+// 筛选属于当前分类的笔记
+const folderNotes = computed(() => {
+  return props.notes.filter(note => note.folderId === props.folder.id)
+})
+
+// 当前选中的笔记ID
+const currentNoteId = computed(() => {
+  return props.currentFolder
+})
+
 const isExpanded = computed(() => !!props.expandedKeys[props.folder.id])
 
-// 处理点击：有子级时展开/折叠，否则选中分类
+// 处理点击：切换展开/折叠状态
 const handleClick = () => {
-  if (props.folder.children && props.folder.children.length > 0) {
-    emit('toggleExpand', props.folder.id)
-  } else {
-    emit('select', props.folder.id)
-  }
+  emit('toggleExpand', props.folder.id)
 }
 
 const isDragOver = computed(() => {
@@ -170,13 +198,11 @@ const isDragOver = computed(() => {
   return props.dragOverFolder.id === props.folder.id
 })
 
-// 用于控制拖拽样式
 const dragOverClass = computed(() => {
   if (!isDragOver.value) return ''
   return props.hoverSide === 'sibling' ? 'drag-over-sibling' : 'drag-over-child'
 })
 
-// 判断鼠标在元素的上半部分还是下半部分（用于指示线位置）
 const isAbove = computed(() => {
   return props.hoverPosition === 'above'
 })
@@ -239,27 +265,27 @@ const onDrop = (event, folder) => {
   color: #409eff;
 }
 
-/* 拖拽到同级（缝隙区域）- 蓝色 */
+.folder-item.active .folder-icon {
+  color: #409eff;
+}
+
 .folder-item.drag-over-sibling {
   border: 2px solid #409eff !important;
   border-left-width: 4px !important;
   background: #ecf5ff !important;
 }
 
-/* 拖拽到子级（覆盖在分类上）- 橙色 */
 .folder-item.drag-over-child {
   border: 2px solid #e6a23c !important;
   border-right-width: 4px !important;
   background: #fdf6ec !important;
 }
 
-/* 拖拽到目标上 - 基本样式（兜底） */
 .folder-item.drag-over {
   background: #fff3e0 !important;
   border: 2px dashed #ff9800 !important;
 }
 
-/* 放置指示线 */
 .drop-indicator {
   height: 3px;
   background: #409eff;
@@ -283,11 +309,6 @@ const onDrop = (event, folder) => {
   color: #409eff;
 }
 
-.folder-expand-placeholder {
-  width: 12px;
-  margin-right: 5px;
-}
-
 .folder-name {
   flex: 1;
   white-space: nowrap;
@@ -301,8 +322,13 @@ const onDrop = (event, folder) => {
   margin-right: 5px;
 }
 
+.folder-icon {
+  margin-right: 6px;
+  color: #909399;
+  font-size: 14px;
+}
+
 .folder-more-icon {
-  margin-left: 5px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.2s;
@@ -315,6 +341,58 @@ const onDrop = (event, folder) => {
 }
 
 .folder-more-icon:hover {
+  color: #409eff;
+}
+
+.folder-more-trigger {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+}
+
+.folder-note-count {
+  margin-left: 12px;
+}
+
+.note-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 2px 0;
+  transition: background 0.2s;
+}
+
+.note-item:hover {
+  background: #f5f7fa;
+}
+
+.note-item.active {
+  background: #e6f0ff;
+  color: #409eff;
+}
+
+.note-icon {
+  margin-right: 6px;
+  color: #909399;
+  font-size: 13px;
+}
+
+.note-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #606266;
+}
+
+.note-item:hover .note-icon {
+  color: #409eff;
+}
+
+.note-item:hover .note-title {
   color: #409eff;
 }
 </style>

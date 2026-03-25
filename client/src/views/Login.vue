@@ -9,6 +9,7 @@
             placeholder="邮箱"
             size="large"
             prefix-icon="Message"
+            @keyup.enter="handleSubmit"
           />
         </el-form-item>
         <el-form-item prop="password">
@@ -19,6 +20,7 @@
             size="large"
             prefix-icon="Lock"
             show-password
+            @keyup.enter="handleSubmit"
           />
         </el-form-item>
         <el-form-item>

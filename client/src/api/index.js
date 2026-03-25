@@ -5,10 +5,26 @@ const api = axios.create({
   timeout: 10000
 })
 
+// Helper to read token from cookie
+const getTokenFromCookie = () => {
+  const cookies = document.cookie.split('; ')
+  const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
+  if (tokenCookie) {
+    return tokenCookie.split('=')[1]
+  }
+  return null
+}
+
+// Helper to clear auth cookie
+const clearAuthCookie = () => {
+  document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+}
+
 // 请求拦截器 - 添加 token
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
+    // Read from cookie instead of localStorage
+    const token = getTokenFromCookie()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -24,12 +40,19 @@ api.interceptors.response.use(
   response => response.data,
   error => {
     if (error.response) {
-      const message = error.response.data?.error || '请求失败'
-      if (error.response.status === 401) {
-        localStorage.removeItem('token')
+      const { status, data } = error.response
+      const message = data?.error || '请求失败'
+
+      if (status === 401) {
+        // Clear auth cookie on unauthorized
+        clearAuthCookie()
         localStorage.removeItem('user')
         window.location.href = '/login'
+      } else if (status === 429) {
+        // Rate limiting
+        return Promise.reject(new Error('请求过于频繁，请稍后再试'))
       }
+
       return Promise.reject(new Error(message))
     }
     return Promise.reject(error)
@@ -40,6 +63,7 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
+  logout: () => api.post('/auth/logout'),
   getUser: () => api.get('/auth/me')
 }
 

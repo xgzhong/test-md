@@ -120,7 +120,19 @@ dotnet restore
 CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. **Backend Configuration** (`server-dotnet/appsettings.json`):
+2. **Environment Variables** - Copy `.env.example` to `.env` and configure:
+
+```bash
+cd server-dotnet
+cp .env.example .env
+```
+
+Key configurations:
+- `DB_CONNECTION_STRING` - Database connection string
+- `JWT_SECRET` - JWT secret (use a long random string in production)
+- `ASPNETCORE_ENVIRONMENT` - Runtime environment (Development/Production)
+
+3. **Backend Configuration** (`server-dotnet/appsettings.json`):
 
 ```json
 {
@@ -150,12 +162,21 @@ pnpm dev
 # Frontend runs at http://localhost:5173
 ```
 
+### Initialize Database
+
+On first run, the endpoint `/api/init` can be used to initialize the database schema (if using EF Core migrations).
+
 ### Build for Production
 
 ```bash
 # Frontend build
 cd client
 pnpm build
+# Build output is in client/dist
+
+# Backend publish
+cd server-dotnet
+dotnet publish -c Release
 ```
 
 ## API Endpoints
@@ -225,6 +246,26 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 API response format:
 - `long` type IDs are returned as strings (e.g., `"id": "785339216482373"`)
 - `DateTime` is formatted as `yyyy-MM-dd HH:mm:ss`
+
+## Screenshots
+
+> Screenshots will be added in future versions
+
+Main interfaces:
+- **Notes List** - Display all notes with search and category filtering
+- **Category Management** - Tree structure with drag-and-drop reordering
+- **Markdown Editor** - Vditor WYSIWYG editing
+- **Note Sharing** - One-click share link generation
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 

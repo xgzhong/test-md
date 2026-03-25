@@ -37,6 +37,9 @@ client/dist/
 server-dotnet/Properties/PublishProfiles/
 server-dotnet/dotnet-tools.json
 
+# Build artifacts (static assets)
+server-dotnet/wwwroot/assets/
+
 # 系统文件
 .DS_Store
 Thumbs.db

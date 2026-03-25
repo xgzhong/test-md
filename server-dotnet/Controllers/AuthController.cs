@@ -1,9 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using server_dotnet.Constants;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
 using BCrypt.Net;
@@ -13,7 +16,8 @@ namespace server_dotnet.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+[AllowAnonymous]
+public class AuthController : BaseController
 {
     private readonly AppDbContext _context;
     private readonly IConfiguration _configuration;
@@ -25,9 +29,13 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
     {
-        if (string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+        // Validation is handled by model validation, but we check for basic empty values
+        if (string.IsNullOrWhiteSpace(request.Username) ||
+            string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new { error = "请填写完整信息" });
         }
@@ -38,7 +46,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "邮箱已被注册" });
         }
 
-        var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password, 10);
+        var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password, BCrypt.Net.BCrypt.GenerateSalt(10));
 
         var user = new server_dotnet.Models.User
         {
@@ -60,17 +68,21 @@ public class AuthController : ControllerBase
 
         var token = GenerateToken(user.Id);
 
+        // Set HttpOnly cookie
+        SetAuthCookie(token);
+
         return StatusCode(201, new AuthResponse(
             "注册成功",
-            token,
+            null,  // Token is in cookie, not body
             new UserDto(user.Id, user.Username, user.Email)
         ));
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
     {
-        if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new { error = "请填写邮箱和密码" });
         }
@@ -88,11 +100,22 @@ public class AuthController : ControllerBase
 
         var token = GenerateToken(user.Id);
 
+        // Set HttpOnly cookie
+        SetAuthCookie(token);
+
         return Ok(new AuthResponse(
             "登录成功",
-            token,
+            null,  // Token is in cookie, not body
             new UserDto(user.Id, user.Username, user.Email)
         ));
+    }
+
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        // Clear the auth cookie
+        Response.Cookies.Delete("auth_token");
+        return Ok(new { message = "注销成功" });
     }
 
     [HttpGet("me")]
@@ -115,7 +138,7 @@ public class AuthController : ControllerBase
 
     private string GenerateToken(long userId)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"] ?? "markdown-notes-secret-key-2024"));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT_SECRET not configured")));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -125,20 +148,21 @@ public class AuthController : ControllerBase
 
         var token = new JwtSecurityToken(
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
+            expires: DateTime.UtcNow.AddDays(AppConstants.TokenExpirationDays),
             signingCredentials: credentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private long? GetUserId()
+    private void SetAuthCookie(string token)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim != null && long.TryParse(userIdClaim, out var userId))
+        Response.Cookies.Append("auth_token", token, new CookieOptions
         {
-            return userId;
-        }
-        return null;
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTimeOffset.UtcNow.AddDays(AppConstants.TokenExpirationDays)
+        });
     }
 }

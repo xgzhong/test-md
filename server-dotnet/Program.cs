@@ -1,14 +1,44 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using server_dotnet.Converters;
+using server_dotnet.Constants;
 using server_dotnet.Data;
+using server_dotnet.Middleware;
 using Yitter.IdGenerator;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Read connection string from environment variable with fallback
+var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
+    ?? (builder.Configuration.GetConnectionString("DefaultConnection") is { } configConnStr
+        && !configConnStr.StartsWith("${")
+        ? configConnStr
+        : null)
+    ?? "Server=localhost;Port=3306;Database=markdown_notes;User=user01;Password=MySQL#123;";
+
+// Read JWT secret from environment variable (must be at least 256 bits / 32 bytes for HS256)
+var jwtSecretEnv = Environment.GetEnvironmentVariable("JWT_SECRET");
+var jwtSecret = !string.IsNullOrWhiteSpace(jwtSecretEnv) ? jwtSecretEnv
+    : (builder.Configuration["Jwt:Secret"] is { } jwtConfig && !jwtConfig.StartsWith("${") ? jwtConfig
+    : "markdown-notes-secret-key-2024-for-jwt-authentication-must-be-at-least-32-chars");
+
+Console.WriteLine($"[DEBUG] JWT_SECRET env: '{jwtSecretEnv}', Config: '{builder.Configuration["Jwt:Secret"]}', Final: '{jwtSecret}' (length: {jwtSecret?.Length})");
+
+// Read CORS origins from environment variable
+var corsOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")
+    ?? builder.Configuration["CORS:AllowedOrigins"]
+    ?? "http://localhost:5173";
+
+// Parse CORS origins
+var allowedOrigins = corsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries)
+    .Select(o => o.Trim())
+    .ToArray();
 
 // Initialize Yitter IdGenerator (雪花ID生成器)
 var snowflakeBaseTimeStr = builder.Configuration["SnowflakeId:BaseTime"] ?? "2026-03-15 00:00:00";
@@ -33,11 +63,10 @@ builder.Services.AddOpenApi();
 // Configure MySQL database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
+        connectionString,
         new MySqlServerVersion(new Version(5, 7, 0))));
 
-// Configure JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "markdown-notes-secret-key-2024";
+// Configure JWT Authentication with cookie support
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -49,18 +78,46 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
+        // Support cookie-based authentication
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                // If token is in cookie, use it
+                if (context.Request.Cookies.TryGetValue("auth_token", out var cookieToken))
+                {
+                    context.Token = cookieToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
 
-// Configure CORS
+// Configure Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter("auth", _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = AppConstants.AuthRateLimitPermitCount,
+                Window = TimeSpan.FromMinutes(AppConstants.AuthRateLimitWindowMinutes)
+            }));
+});
+
+// Configure CORS with restrictive policy
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("Restrictive", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        policy.WithOrigins(allowedOrigins)
+              .WithMethods("GET", "POST", "PUT", "DELETE")
+              .WithHeaders("Content-Type", "Authorization")
+              .AllowCredentials()
+              .SetPreflightMaxAge(TimeSpan.FromHours(1));
     });
 });
 
@@ -77,10 +134,16 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // Enable CORS
-app.UseCors("AllowAll");
+app.UseCors("Restrictive");
+
+// Global exception handler
+app.UseMiddleware<GlobalExceptionHandler>();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Rate limiting
+app.UseRateLimiter();
 
 // Map routes
 app.MapControllers();

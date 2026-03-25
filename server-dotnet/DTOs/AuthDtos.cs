@@ -1,9 +1,36 @@
+using System.ComponentModel.DataAnnotations;
+using server_dotnet.Constants;
+
 namespace server_dotnet.DTOs;
 
-// Auth DTOs
-public record RegisterRequest(string Username, string Email, string Password);
-public record LoginRequest(string Email, string Password);
-public record AuthResponse(string Message, string Token, UserDto User);
+// Auth DTOs with validation
+public record RegisterRequest(
+    [Required(ErrorMessage = "用户名不能为空")]
+    [StringLength(AppConstants.MaxUsernameLength, MinimumLength = AppConstants.MinUsernameLength, ErrorMessage = "用户名长度必须在2-50之间")]
+    [RegularExpression(@"^[a-zA-Z0-9_\u4e00-\u9fa5]+$", ErrorMessage = "用户名只能包含字母、数字、下划线和中文")]
+    string Username,
+
+    [Required(ErrorMessage = "邮箱不能为空")]
+    [EmailAddress(ErrorMessage = "邮箱格式不正确")]
+    [StringLength(AppConstants.MaxEmailLength)]
+    string Email,
+
+    [Required(ErrorMessage = "密码不能为空")]
+    [StringLength(100, MinimumLength = AppConstants.MinPasswordLength, ErrorMessage = "密码长度必须在8-100之间")]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$", ErrorMessage = "密码必须包含大小写字母和数字")]
+    string Password
+);
+
+public record LoginRequest(
+    [Required(ErrorMessage = "邮箱不能为空")]
+    [EmailAddress(ErrorMessage = "邮箱格式不正确")]
+    string Email,
+
+    [Required(ErrorMessage = "密码不能为空")]
+    string Password
+);
+
+public record AuthResponse(string Message, string? Token, UserDto? User);
 public record UserDto(long Id, string Username, string Email);
 public record UserResponse(UserDto User);
 

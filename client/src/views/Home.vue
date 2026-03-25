@@ -4,6 +4,7 @@
     <Sidebar
       :collapsed="sidebarCollapsed"
       :folders="folders"
+      :notes="sidebarNotes"
       :currentFolder="currentFolder"
       :totalNotes="totalNotes"
       :uncategorizedCount="uncategorizedCount"
@@ -14,6 +15,7 @@
       :hoverPosition="hoverPosition"
       @toggle="toggleSidebar"
       @select="selectFolder"
+      @openNote="openNote"
       @addFolder="showFolderDialog = true"
       @pin="togglePinFolder"
       @edit="editFolderName"
@@ -187,6 +189,7 @@ const router = useRouter()
 
 const currentUser = ref(null)
 const notes = ref([])
+const sidebarNotes = ref([])
 const folders = ref([])
 const currentFolder = ref(null)
 const searchText = ref('')
@@ -401,8 +404,20 @@ const loadFolders = async () => {
     const res = await foldersAPI.getAll()
     folders.value = res.folders
     uncategorizedCount.value = res.uncategorizedCount
+    // 加载所有笔记用于侧边栏展示
+    loadAllNotesForSidebar()
   } catch (error) {
     ElMessage.error(error.message)
+  }
+}
+
+// 加载所有笔记用于侧边栏分类下显示
+const loadAllNotesForSidebar = async () => {
+  try {
+    const res = await notesAPI.getAll({})
+    sidebarNotes.value = res.notes || []
+  } catch (error) {
+    console.error('加载笔记失败:', error)
   }
 }
 
@@ -466,6 +481,10 @@ const createWorkLog = async () => {
 }
 
 const editNote = (id) => {
+  router.push(`/note/${id}`)
+}
+
+const openNote = (id) => {
   router.push(`/note/${id}`)
 }
 

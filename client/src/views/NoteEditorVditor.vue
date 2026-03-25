@@ -4,12 +4,14 @@
     <Sidebar
       :collapsed="false"
       :folders="folders"
+      :notes="notes"
       :currentFolder="currentFolder"
       :showAddFolder="false"
       :showPin="false"
       :showEdit="false"
       :showDelete="false"
       @select="handleSelectFolder"
+      @openNote="handleOpenNote"
     />
 
     <!-- 编辑器区域 -->
@@ -176,6 +178,7 @@ const original = reactive({
 
 // 分类列表
 const folders = ref([])
+const notes = ref([])
 const noteVersions = ref([])
 const currentFolder = ref(null)
 
@@ -215,7 +218,7 @@ const withRetry = async (fn, retries = 3, delay = 1000) => {
   }
 }
 
-const initVditor = (content) => {
+const initVditor = (content, onReady) => {
   if (vditor) {
     vditor.destroy()
     vditor = null
@@ -226,6 +229,9 @@ const initVditor = (content) => {
     mode: 'wysiwyg',
     placeholder: '在这里使用 Markdown 编写笔记...',
     lang: 'zh_CN',
+    after: () => {
+      if (onReady) onReady()
+    },
     toolbar: [
       'headings',
       'bold',
@@ -279,7 +285,9 @@ const initVditor = (content) => {
       note.content = value
       handleInput()
     },
-    blur: () => {},
+    blur: () => {
+      handleBlur()
+    },
     ready: () => {}
   })
 }
@@ -326,6 +334,15 @@ const loadFolders = async () => {
     folders.value = res.folders
   } catch (error) {
     ElMessage.error(error.message)
+  }
+}
+
+const loadNotes = async () => {
+  try {
+    const res = await notesAPI.getAll({})
+    notes.value = res.notes || []
+  } catch (error) {
+    console.error('加载笔记失败:', error)
   }
 }
 
@@ -401,13 +418,20 @@ const handleInput = () => {
 
   if (inputTimer) clearTimeout(inputTimer)
   inputTimer = setTimeout(() => {
-    // 只有内容变化较大时才自动保存
-    const contentChanged = note.content.length > original.content.length + 50 ||
-                          note.content.length < original.content.length - 50
-    if (contentChanged || note.title !== original.title) {
+    // 只有内容变化较大（超过100字符）时才自动保存
+    const contentDelta = Math.abs(note.content.length - original.content.length)
+    const hasSignificantChange = contentDelta > 100 || note.title !== original.title
+    if (hasSignificantChange) {
       saveNote()
     }
-  }, 2000)
+  }, 3000)  // 3秒防抖
+}
+
+// Save on blur (when user switches tabs/windows)
+const handleBlur = () => {
+  if (ui.hasUnsavedChanges) {
+    saveNote()
+  }
 }
 
 const handleTitleInput = () => {
@@ -581,6 +605,13 @@ const handleSelectFolder = async () => {
   })
 }
 
+// 处理打开笔记
+const handleOpenNote = (noteId) => {
+  if (noteId) {
+    router.push(`/note/${noteId}`)
+  }
+}
+
 // 处理返回按钮
 const handleGoHome = async () => {
   const currentHasChanges = note.title !== original.title ||
@@ -645,9 +676,11 @@ const handleOutsideClick = (event) => {
 onMounted(() => {
   note.id = route.params.id
   if (note.id) {
-    initVditor('')
-    loadNote()
+    initVditor('', () => {
+      loadNote()
+    })
     loadFolders()
+    loadNotes()
     loadVersions()
   }
 })

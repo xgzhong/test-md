@@ -1,7 +1,9 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using server_dotnet.Constants;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
 using Yitter.IdGenerator;
@@ -11,7 +13,7 @@ namespace server_dotnet.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class NotesController : ControllerBase
+public class NotesController : BaseController
 {
     private readonly AppDbContext _context;
 
@@ -191,6 +193,10 @@ public class NotesController : ControllerBase
                 Version = YitIdHelper.NextId()
             };
             _context.NoteVersions.Add(versionRecord);
+            await _context.SaveChangesAsync();
+
+            // Cleanup old versions
+            await CleanupOldVersionsAsync(note.Id);
         }
 
         if (request.Title != null) note.Title = request.Title;
@@ -252,7 +258,7 @@ public class NotesController : ControllerBase
         }
 
         note.IsShared = true;
-        note.ShareToken = Guid.NewGuid().ToString();
+        note.ShareToken = GenerateSecureToken();
         await _context.SaveChangesAsync();
 
         return Ok(new ShareResponse("分享成功", $"/shared/{note.ShareToken}"));
@@ -292,7 +298,7 @@ public class NotesController : ControllerBase
         var versions = await _context.NoteVersions
             .Where(v => v.NoteId == id && !v.IsDeleted)
             .OrderByDescending(v => v.CreatedAt)
-            .Take(50)
+            .Take(AppConstants.VersionsPageSize)
             .Select(v => new NoteVersionDto(v.Id, v.Title, v.Content, v.CreatedAt))
             .ToListAsync();
 
@@ -338,6 +344,9 @@ public class NotesController : ControllerBase
         note.Version = YitIdHelper.NextId();
         await _context.SaveChangesAsync();
 
+        // Cleanup old versions after restore
+        await CleanupOldVersionsAsync(note.Id);
+
         var folder = note.FolderId.HasValue ? await _context.Folders.FindAsync(note.FolderId) : null;
 
         return Ok(new NoteResponse("恢复成功", new NoteDto(
@@ -379,13 +388,39 @@ public class NotesController : ControllerBase
         return Ok(new { message = "版本删除成功" });
     }
 
-    private long? GetUserId()
+    /// <summary>
+    /// Cleanup old versions, keeping only the most recent ones
+    /// </summary>
+    private async Task CleanupOldVersionsAsync(long noteId)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim != null && long.TryParse(userIdClaim, out var userId))
+        var oldVersions = await _context.NoteVersions
+            .Where(v => v.NoteId == noteId && !v.IsDeleted)
+            .OrderByDescending(v => v.CreatedAt)
+            .Skip(AppConstants.MaxVersionsToKeep)
+            .ToListAsync();
+
+        foreach (var version in oldVersions)
         {
-            return userId;
+            version.IsDeleted = true;
         }
-        return null;
+
+        if (oldVersions.Count > 0)
+        {
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    /// <summary>
+    /// Generate cryptographically secure token for share URLs
+    /// </summary>
+    private static string GenerateSecureToken()
+    {
+        var bytes = new byte[AppConstants.ShareTokenLength];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(bytes);
+        return Convert.ToBase64String(bytes)
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .Replace("=", "");
     }
 }
