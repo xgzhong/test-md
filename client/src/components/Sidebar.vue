@@ -1,8 +1,8 @@
 <template>
-  <div class="sidebar" :class="{ collapsed: collapsed }">
-    <div class="sidebar-header">
+  <div class="sidebar" :class="{ collapsed: collapsed }" :style="{ width: collapsed ? '50px' : sidebarWidth + 'px' }">
+    <div class="sidebar-header" @click="$emit('titleClick')">
       <slot name="header">
-        <h2 v-if="!collapsed">{{ title }}</h2>
+        <h2 v-if="!collapsed" style="cursor: pointer;">{{ title }}</h2>
       </slot>
     </div>
     <!-- 折叠按钮 -->
@@ -10,6 +10,12 @@
       <el-icon v-if="collapsed"><Expand /></el-icon>
       <el-icon v-else><Fold /></el-icon>
     </div>
+    <!-- 拖动调整宽度手柄 -->
+    <div
+      v-if="!collapsed"
+      class="sidebar-resize-handle"
+      @mousedown="startResize"
+    ></div>
     <div class="sidebar-menu" v-show="!collapsed">
       <!-- 全部笔记 -->
       <div
@@ -94,6 +100,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  width: {
+    type: Number,
+    default: 380
+  },
   folders: {
     type: Array,
     default: () => []
@@ -150,11 +160,49 @@ const emit = defineEmits([
   'dragStart',
   'dragOver',
   'dragleave',
-  'drop'
+  'drop',
+  'update:width',
+  'titleClick'
 ])
 
 // 展开状态 - 使用对象替代 Set 以便 Vue 更好地追踪变化
 const expandedKeys = ref({})
+
+// 侧边栏宽度拖动调整
+const MIN_WIDTH = 200
+const MAX_WIDTH = 600
+const sidebarWidth = ref(props.width)
+let isResizing = false
+let startX = 0
+let startWidth = 0
+
+const startResize = (e) => {
+  isResizing = true
+  startX = e.clientX
+  startWidth = sidebarWidth.value
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+const onResize = (e) => {
+  if (!isResizing) return
+  const delta = e.clientX - startX
+  const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta))
+  sidebarWidth.value = newWidth
+}
+
+const stopResize = () => {
+  if (isResizing) {
+    isResizing = false
+    document.removeEventListener('mousemove', onResize)
+    document.removeEventListener('mouseup', stopResize)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    emit('update:width', sidebarWidth.value)
+  }
+}
 
 const toggleExpand = (folderId) => {
   expandedKeys.value = {
@@ -189,19 +237,34 @@ const onDropToRoot = (event) => {
 
 <style scoped>
 .sidebar {
-  width: 380px;
   height: 100%;
   background: #f5f7fa;
   border-right: 1px solid #e4e7ed;
   display: flex;
   flex-direction: column;
-  transition: width 0.3s;
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .sidebar.collapsed {
   width: 50px;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 20;
+  transition: background 0.2s;
+}
+
+.sidebar-resize-handle:hover {
+  background: #409eff;
 }
 
 .sidebar-header {
@@ -218,10 +281,14 @@ const onDropToRoot = (event) => {
   text-overflow: ellipsis;
 }
 
+.sidebar-header h2:hover {
+  color: #409eff;
+}
+
 .sidebar-toggle {
   position: absolute;
   top: 25px;
-  right: 10px;
+  right: 0;
   cursor: pointer;
   padding: 5px;
   color: #909399;

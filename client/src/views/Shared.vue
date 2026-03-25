@@ -33,6 +33,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { Loading } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { sharedAPI } from '../api'
 
 const route = useRoute()
@@ -42,7 +43,9 @@ const loading = ref(true)
 const error = ref('')
 
 const renderedContent = computed(() => {
-  return marked(note.value.content || '')
+  if (!note.value.content) return ''
+  const html = marked(note.value.content)
+  return DOMPurify.sanitize(html)
 })
 
 const loadSharedNote = async () => {

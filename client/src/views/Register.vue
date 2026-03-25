@@ -115,8 +115,8 @@ const handleSubmit = async () => {
     const { confirmPassword, ...registerData } = form
     const res = await authAPI.register(registerData)
 
-    localStorage.setItem('token', res.token)
     localStorage.setItem('user', JSON.stringify(res.user))
+    localStorage.setItem('isLoggedIn', 'true')
 
     ElMessage.success('注册成功')
     router.push('/home')

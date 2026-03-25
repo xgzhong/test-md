@@ -11,14 +11,14 @@
       ]"
       :style="{ paddingLeft: (level * 20 + 8) + 'px' }"
       draggable="true"
-      @click.stop="handleClick"
+      @click.stop="handleFolderClick"
       @dragstart="onDragStart($event, folder)"
       @dragover.prevent="onDragOver($event, folder)"
       @dragleave="onDragLeave($event)"
       @drop="onDrop($event, folder)"
     >
       <!-- 展开/折叠按钮 -->
-      <el-icon class="folder-expand-icon" @click.stop="handleClick">
+      <el-icon class="folder-expand-icon" @click.stop="handleToggleExpand">
         <ArrowRight v-if="!isExpanded" />
         <ArrowDown v-else />
       </el-icon>
@@ -30,8 +30,8 @@
       </el-tooltip>
 
       <!-- 更多操作下拉菜单 -->
-      <el-dropdown trigger="click" @command="handleCommand" v-if="showMore" @click.stop>
-        <span class="folder-more-trigger">
+      <el-dropdown trigger="click" @command="handleCommand" v-if="showMore">
+        <span class="folder-more-trigger" @click.stop>
           <el-icon class="folder-more-icon">
             <MoreFilled />
           </el-icon>
@@ -189,8 +189,13 @@ const currentNoteId = computed(() => {
 const isExpanded = computed(() => !!props.expandedKeys[props.folder.id])
 
 // 处理点击：切换展开/折叠状态
-const handleClick = () => {
+const handleToggleExpand = () => {
   emit('toggleExpand', props.folder.id)
+}
+
+// 处理文件夹点击：导航到文件夹详情页
+const handleFolderClick = () => {
+  emit('select', props.folder.id)
 }
 
 const isDragOver = computed(() => {

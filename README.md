@@ -1,12 +1,12 @@
-[English](./README-en.md)
-
 # Markdown Notes App
+
+[English](./README-en.md)
 
 一个基于 Web 的 Markdown 笔记应用，支持笔记分类、历史版本管理和分享功能。
 
 ## 功能特性
 
-- **用户认证** - 注册、登录，JWT 令牌认证
+- **用户认证** - 注册、登录，JWT 令牌认证（HttpOnly Cookie 安全存储）
 - **笔记管理** - 创建、编辑、删除 Markdown 笔记
 - **分类管理** - 树形文件夹分类整理
   - 支持多级分类（层级结构）
@@ -14,12 +14,13 @@
   - 拖拽调整父子关系（通过视觉指示线）
   - 置顶、编辑名称、删除分类
 - **历史版本** - 手动保存版本历史，支持版本回溯和删除
-- **笔记分享** - 生成分享链接他人查看
+- **笔记分享** - 生成分享链接他人查看（XSS 安全防护）
 - **Markdown 编辑器** - 使用 Vditor 实现所见即所得编辑
-- **侧边栏** - 支持折叠和展开，可复用组件
+- **侧边栏** - 支持折叠和展开，可拖拽调整宽度
+- **分类详情页** - 查看分类下的子分类和笔记列表
+- **面包屑导航** - 笔记编辑页显示所属分类路径
 - **工作日志** - 自动生成当月工作日志模板
 - **雪花ID** - 使用 Yitter.IdGenerator 生成分布式 ID
-- **数据版本** - 每条记录包含 Version 字段用于版本控制
 
 ## 技术栈
 
@@ -31,15 +32,17 @@
 - Axios
 - Vue Router
 - Vditor (Markdown 编辑器)
+- DOMPurify (XSS 安全防护)
 
 ### 后端
 
-- ASP.NET Core 9.0
+- ASP.NET Core 10.0
 - Entity Framework Core
 - MySQL
 - JWT 认证
 - Yitter.IdGenerator (雪花ID)
 - BCrypt.Net-Next (密码加密)
+- 速率限制
 
 ## 项目结构
 
@@ -56,6 +59,7 @@ test-md/
 │   │   │   ├── Register.vue     # 注册页面
 │   │   │   ├── Home.vue         # 笔记列表主页
 │   │   │   ├── NoteEditorVditor.vue # Markdown 编辑器
+│   │   │   ├── FolderDetail.vue  # 分类详情页
 │   │   │   └── Shared.vue       # 分享笔记页面
 │   │   ├── router/              # 路由配置
 │   │   ├── main.js              # 入口文件
@@ -65,7 +69,7 @@ test-md/
 │   ├── package.json
 │   └── vite.config.js           # Vite 配置
 │
-├── server-dotnet/               # 后端项目 (.NET 9.0)
+├── server-dotnet/               # 后端项目 (.NET 10.0)
 │   ├── Controllers/             # API 控制器
 │   │   ├── AuthController.cs    # 认证接口
 │   │   ├── NotesController.cs   # 笔记接口
@@ -80,9 +84,13 @@ test-md/
 │   │   └── AppDbContext.cs
 │   ├── DTOs/                    # 数据传输对象
 │   │   └── AuthDtos.cs
+│   ├── Middleware/              # 中间件
+│   │   └── GlobalExceptionHandler.cs
 │   ├── Converters/              # JSON 转换器
 │   │   ├── LongToStringConverter.cs
 │   │   └── DateTimeOffsetConverter.cs
+│   ├── Constants/               # 常量配置
+│   │   └── AppConstants.cs
 │   ├── appsettings.json         # 配置文件
 │   └── Program.cs               # 入口文件
 │
@@ -97,7 +105,7 @@ test-md/
 
 - Node.js 18+
 - pnpm 9+
-- .NET SDK 9.0+
+- .NET SDK 10.0+
 - MySQL 5.7+
 
 ### 安装
@@ -120,33 +128,30 @@ dotnet restore
 CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. **环境变量配置** - 复制 `.env.example` 为 `.env` 并配置：
-
-```bash
-cd server-dotnet
-cp .env.example .env
-```
+2. **环境变量配置** - 设置以下环境变量：
 
 主要配置项：
 - `DB_CONNECTION_STRING` - 数据库连接字符串
-- `JWT_SECRET` - JWT 密钥（生产环境请使用足够长度的随机字符串）
-- `ASPNETCORE_ENVIRONMENT` - 运行环境 (Development/Production)
+- `JWT_SECRET` - JWT 密钥（生产环境请使用足够长度的随机字符串，至少 32 字符）
+- `CORS_ALLOWED_ORIGINS` - CORS 允许的前端地址（多个用逗号分隔）
 
 3. **后端配置** (`server-dotnet/appsettings.json`)：
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Port=3306;Database=markdown_notes;User=root;Password=your_password;"
+    "DefaultConnection": "${DB_CONNECTION_STRING}"
   },
   "Jwt": {
-    "Secret": "your-secret-key-change-in-production"
+    "Secret": "${JWT_SECRET}"
   },
-  "SnowflakeId": {
-    "BaseTime": "2026-01-01 00:00:00"
+  "CORS": {
+    "AllowedOrigins": "${CORS_ALLOWED_ORIGINS}"
   }
 }
 ```
+
+**重要**：生产环境务必通过环境变量配置敏感信息，不要使用硬编码的默认值。
 
 ### 启动开发服务器
 
@@ -164,7 +169,7 @@ pnpm dev
 
 ### 初始化数据库
 
-首次运行后，端点 `/api/init` 可用于初始化数据库表结构（如果使用 EF Core migrations）。
+首次运行时会自动创建数据库表结构。
 
 ### 构建生产版本
 
@@ -187,6 +192,7 @@ dotnet publish -c Release
 |------|------|------|
 | POST | /api/auth/register | 用户注册 |
 | POST | /api/auth/login | 用户登录 |
+| POST | /api/auth/logout | 用户登出 |
 | GET | /api/auth/me | 获取当前用户信息 |
 
 ### 笔记
@@ -197,7 +203,7 @@ dotnet publish -c Release
 | GET | /api/notes/:id | 获取笔记详情 |
 | POST | /api/notes | 创建笔记 |
 | PUT | /api/notes/:id | 更新笔记 |
-| DELETE | /api/notes/:id | 删除笔记 (逻辑删除) |
+| DELETE | /api/notes/:id | 删除笔记 (软删除) |
 | POST | /api/notes/:id/share | 分享笔记 |
 | POST | /api/notes/:id/unshare | 取消分享 |
 | GET | /api/notes/:id/versions | 获取版本历史 |
@@ -247,15 +253,13 @@ API 返回格式：
 - `long` 类型 ID 以字符串形式返回（如 `"id": "785339216482373"`）
 - `DateTime` 以 `yyyy-MM-dd HH:mm:ss` 格式返回
 
-## 截图
+## 安全特性
 
-> 截图将在后续版本中添加
-
-主要界面：
-- **笔记列表** - 展示所有笔记，支持搜索和分类筛选
-- **分类管理** - 树形结构展示，支持拖拽排序和层级调整
-- **Markdown 编辑器** - Vditor 所见即所得编辑
-- **笔记分享** - 一键生成分享链接
+- JWT 令牌存储在 HttpOnly Cookie 中，防止 XSS 攻击
+- 使用 BCrypt 加密密码
+- 分享内容通过 DOMPurify 进行 HTML 净化，防止 XSS
+- 支持速率限制（认证接口 5 次/分钟）
+- CORS 跨域策略配置
 
 ## 贡献
 

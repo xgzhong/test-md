@@ -3,6 +3,7 @@
     <!-- 侧边栏 -->
     <Sidebar
       :collapsed="sidebarCollapsed"
+      :width="sidebarWidth"
       :folders="folders"
       :notes="sidebarNotes"
       :currentFolder="currentFolder"
@@ -26,6 +27,8 @@
       @dragOver="onDragOver"
       @drag-leave="onDragLeave"
       @drop="onDrop"
+      @update:width="sidebarWidth = $event"
+      @titleClick="router.push('/home')"
     />
 
     <!-- 主内容区 -->
@@ -105,11 +108,11 @@
         <!-- 底部信息 -->
         <div class="footer">
           <p>
-            <span>Markdown Notes App</span>
+            <span class="footer-link" @click="router.push('/home')">Markdown Notes App</span>
             <span style="margin: 0 10px;">|</span>
-            <a href="https://github.com" target="_blank">开源地址</a>
+            <a href="https://github.com/xgzhong/test-md" target="_blank" class="github-link">GitHub</a>
             <span style="margin: 0 10px;">|</span>
-            <span>作者：Your Name</span>
+            <span>xgzhong</span>
           </p>
         </div>
       </div>
@@ -181,11 +184,14 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Document, Delete, Star, Fold, Expand, Edit } from '@element-plus/icons-vue'
-import { notesAPI, foldersAPI } from '../api'
+import { Plus, Search, Delete, Fold, Expand, Edit } from '@element-plus/icons-vue'
+import { notesAPI, foldersAPI, authAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
 
 const router = useRouter()
+
+// Drag-drop threshold for determining sibling vs child placement
+const DRAG_SIBLING_THRESHOLD = 0.35
 
 const currentUser = ref(null)
 const notes = ref([])
@@ -194,6 +200,7 @@ const folders = ref([])
 const currentFolder = ref(null)
 const searchText = ref('')
 const uncategorizedCount = ref(0)
+const sidebarWidth = ref(380)
 
 // 拖拽状态
 const draggedFolder = ref(null)
@@ -265,15 +272,12 @@ const onDragStart = (event, folder) => {
 const onDragOver = (event, folder) => {
   dragOverFolder.value = folder
   event.dataTransfer.dropEffect = 'move'
-  // 查找 folder-item 元素
   const target = event.target.closest('.folder-item')
   if (!target) return
   const rect = target.getBoundingClientRect()
   const y = event.clientY - rect.top
   const relativeY = y / rect.height
-  // 鼠标在元素上半部分 = 并列 (sibling)，下半部分 = 子级 (child)
-  hoverSide.value = relativeY < 0.35 ? 'sibling' : 'child'
-  // 记录鼠标在元素的上半部分还是下半部分
+  hoverSide.value = relativeY < DRAG_SIBLING_THRESHOLD ? 'sibling' : 'child'
   hoverPosition.value = relativeY < 0.5 ? 'above' : 'below'
 }
 
@@ -422,8 +426,16 @@ const loadAllNotesForSidebar = async () => {
 }
 
 const selectFolder = (folderId) => {
-  currentFolder.value = folderId
-  loadNotes()
+  if (folderId === null) {
+    currentFolder.value = null
+    loadNotes()
+  } else if (folderId === 'uncategorized') {
+    currentFolder.value = 'uncategorized'
+    loadNotes()
+  } else {
+    // 跳转到分类详情页
+    router.push(`/folder/${folderId}`)
+  }
 }
 
 const handleSearch = () => {
@@ -610,9 +622,14 @@ const logout = () => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
-  }).then(() => {
-    localStorage.removeItem('token')
+  }).then(async () => {
+    try {
+      await authAPI.logout()
+    } catch (error) {
+      // Ignore logout API errors
+    }
     localStorage.removeItem('user')
+    localStorage.removeItem('isLoggedIn')
     router.push('/login')
   }).catch(() => {})
 }
@@ -644,3 +661,23 @@ onMounted(() => {
   loadFolders()
 })
 </script>
+
+<style scoped>
+.footer-link {
+  cursor: pointer;
+  color: #409eff;
+}
+
+.footer-link:hover {
+  color: #66b1ff;
+}
+
+.github-link {
+  color: #333;
+  text-decoration: none;
+}
+
+.github-link:hover {
+  color: #409eff;
+}
+</style>

@@ -19,16 +19,23 @@ var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING"
     ?? (builder.Configuration.GetConnectionString("DefaultConnection") is { } configConnStr
         && !configConnStr.StartsWith("${")
         ? configConnStr
-        : null)
-    ?? "Server=localhost;Port=3306;Database=markdown_notes;User=user01;Password=MySQL#123;";
+        : null);
+
+if (string.IsNullOrWhiteSpace(connectionString) || connectionString.StartsWith("${"))
+{
+    throw new InvalidOperationException("Database connection string must be configured via DB_CONNECTION_STRING environment variable or appsettings.json");
+}
 
 // Read JWT secret from environment variable (must be at least 256 bits / 32 bytes for HS256)
 var jwtSecretEnv = Environment.GetEnvironmentVariable("JWT_SECRET");
 var jwtSecret = !string.IsNullOrWhiteSpace(jwtSecretEnv) ? jwtSecretEnv
     : (builder.Configuration["Jwt:Secret"] is { } jwtConfig && !jwtConfig.StartsWith("${") ? jwtConfig
-    : "markdown-notes-secret-key-2024-for-jwt-authentication-must-be-at-least-32-chars");
+    : null);
 
-Console.WriteLine($"[DEBUG] JWT_SECRET env: '{jwtSecretEnv}', Config: '{builder.Configuration["Jwt:Secret"]}', Final: '{jwtSecret}' (length: {jwtSecret?.Length})");
+if (string.IsNullOrWhiteSpace(jwtSecret))
+{
+    throw new InvalidOperationException("JWT secret must be configured via JWT_SECRET environment variable or appsettings.json");
+}
 
 // Read CORS origins from environment variable
 var corsOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")

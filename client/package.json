@@ -10,6 +10,7 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "axios": "^1.6.2",
+    "dompurify": "^3.3.3",
     "element-plus": "^2.4.4",
     "marked": "^11.1.0",
     "vditor": "^3.11.2",

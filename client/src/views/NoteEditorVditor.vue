@@ -3,6 +3,7 @@
     <!-- 侧边栏 -->
     <Sidebar
       :collapsed="false"
+      :width="sidebarWidth"
       :folders="folders"
       :notes="notes"
       :currentFolder="currentFolder"
@@ -12,6 +13,8 @@
       :showDelete="false"
       @select="handleSelectFolder"
       @openNote="handleOpenNote"
+      @update:width="sidebarWidth = $event"
+      @titleClick="handleGoHome"
     />
 
     <!-- 编辑器区域 -->
@@ -19,6 +22,17 @@
       <div class="content-header">
         <div class="header-left">
           <el-icon class="home-icon" @click="handleGoHome"><Back /></el-icon>
+          <el-breadcrumb separator="/" v-if="breadcrumbPath.length > 0">
+            <el-breadcrumb-item v-for="(item, index) in breadcrumbPath" :key="item.id">
+              <span
+                class="breadcrumb-item"
+                :class="{ 'breadcrumb-clickable': index < breadcrumbPath.length - 1 }"
+                @click="index < breadcrumbPath.length - 1 && handleBreadcrumbClick(item)"
+              >
+                {{ item.name }}
+              </span>
+            </el-breadcrumb-item>
+          </el-breadcrumb>
           <span v-if="ui.showSavedTip" class="saved-tip">已保存</span>
           <span v-else class="saved-tip-placeholder"></span>
           <el-input
@@ -38,7 +52,7 @@
             class="folder-select"
             @change="handleFolderChange"
           >
-            <el-option label="未分类" :value="undefined" />
+            <el-option label="未分类" value="" />
             <el-option
               v-for="folder in folders"
               :key="folder.id"
@@ -135,11 +149,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back } from '@element-plus/icons-vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { notesAPI, foldersAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
 import Vditor from 'vditor'
@@ -147,6 +162,13 @@ import 'vditor/dist/index.css'
 
 const router = useRouter()
 const route = useRoute()
+
+// Constants
+const AUTO_SAVE_DEBOUNCE_MS = 3000
+const AUTO_SAVE_MIN_CONTENT_DELTA = 100
+
+// 侧边栏宽度
+const sidebarWidth = ref(380)
 
 // 笔记数据
 const note = reactive({
@@ -158,6 +180,9 @@ const note = reactive({
   isNew: false,
   version: 0
 })
+
+// 标记是否正在执行程序化导航（避免路由守卫重复确认）
+let isProgrammaticNavigation = false
 
 // UI 状态
 const ui = reactive({
@@ -197,13 +222,61 @@ const charCount = computed(() => {
   return note.content.length
 })
 
+const noteFolderId = computed({
+  get: () => note.folderId ?? '',
+  set: (val) => { note.folderId = val === '' ? null : val }
+})
+
 const renderedContent = computed(() => {
   return marked(note.content || '')
 })
 
+// 构建面包屑路径 - 递归搜索树形结构
+const breadcrumbPath = computed(() => {
+  if (!note.folderId || !folders.value || folders.value.length === 0) return []
+  const path = []
+
+  // 在树形结构中递归查找文件夹
+  const findFolder = (folderList, folderId) => {
+    const fid = String(folderId)
+    for (const folder of folderList) {
+      if (String(folder.id) === fid) {
+        return folder
+      }
+      if (folder.children && folder.children.length > 0) {
+        const found = findFolder(folder.children, folderId)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  const findFolderPath = (folderId, currentPath) => {
+    const folder = findFolder(folders.value, folderId)
+    if (folder) {
+      if (folder.parentId) {
+        findFolderPath(folder.parentId, currentPath)
+      }
+      currentPath.push({ id: folder.id, name: folder.name })
+    }
+  }
+  findFolderPath(note.folderId, path)
+  return path
+})
+
+// 点击面包屑项切换分类
+const handleBreadcrumbClick = (folder) => {
+  router.push('/home')
+  // 触发切换到对应分类
+  nextTick(() => {
+    // Emit event to switch folder after navigation
+  })
+}
+
 const renderVersionContent = computed(() => {
   if (!ui.selectedVersion) return ''
-  return marked(ui.selectedVersion.content || '')
+  const html = marked(ui.selectedVersion.content || '')
+  return DOMPurify.sanitize(html)
 })
 
 // 重试机制
@@ -258,18 +331,17 @@ const initVditor = (content, onReady) => {
       'preview',
       'fullscreen'
     ],
+    customWysiwygToolbar: () => [],
+    toolbarConfig: {
+      pin: true
+    },
     upload: {
       accept: 'image/*',
       handler: async (files) => {
         const file = files[0]
         if (!file) return
 
-        const formData = new FormData()
-        formData.append('file', file)
-
         try {
-          // 这里需要后端支持图片上传
-          // 暂时使用 base64 方式
           const reader = new FileReader()
           reader.onload = (e) => {
             const base64 = e.target.result
@@ -418,13 +490,12 @@ const handleInput = () => {
 
   if (inputTimer) clearTimeout(inputTimer)
   inputTimer = setTimeout(() => {
-    // 只有内容变化较大（超过100字符）时才自动保存
     const contentDelta = Math.abs(note.content.length - original.content.length)
-    const hasSignificantChange = contentDelta > 100 || note.title !== original.title
+    const hasSignificantChange = contentDelta > AUTO_SAVE_MIN_CONTENT_DELTA || note.title !== original.title
     if (hasSignificantChange) {
       saveNote()
     }
-  }, 3000)  // 3秒防抖
+  }, AUTO_SAVE_DEBOUNCE_MS)
 }
 
 // Save on blur (when user switches tabs/windows)
@@ -573,7 +644,10 @@ const navigateToHome = async (shouldSave = false, shouldDelete = false) => {
       // 忽略删除错误
     }
   }
+  isProgrammaticNavigation = true
   router.push('/home')
+  // 重置标志
+  setTimeout(() => { isProgrammaticNavigation = false }, 100)
 }
 
 // 处理选择分类
@@ -661,6 +735,10 @@ const formatDate = (dateStr) => {
 }
 
 onBeforeRouteLeave(async () => {
+  // 如果是程序化导航，不触发确认对话框
+  if (isProgrammaticNavigation) {
+    return true
+  }
   return await confirmBeforeLeave()
 })
 
@@ -738,6 +816,20 @@ onBeforeUnmount(() => {
 
 .saved-tip-placeholder {
   width: 30px;
+}
+
+.breadcrumb-item {
+  font-size: 14px;
+  color: #606266;
+}
+
+.breadcrumb-clickable {
+  cursor: pointer;
+  color: #409eff;
+}
+
+.breadcrumb-clickable:hover {
+  color: #66b1ff;
 }
 
 .title-input {

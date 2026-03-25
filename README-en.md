@@ -1,12 +1,12 @@
-[中文](./README.md)
-
 # Markdown Notes App
+
+[中文](./README.md)
 
 A web-based Markdown note-taking application with note categorization, version history management, and sharing capabilities.
 
 ## Features
 
-- **User Authentication** - Register, Login, JWT token authentication
+- **User Authentication** - Register, Login, JWT token authentication (HttpOnly Cookie storage)
 - **Note Management** - Create, edit, delete Markdown notes
 - **Category Management** - Tree folder structure organization
   - Multi-level categories (hierarchical structure)
@@ -14,12 +14,13 @@ A web-based Markdown note-taking application with note categorization, version h
   - Drag-and-drop to change parent-child relationships (with visual indicator)
   - Pin, rename, and delete categories
 - **Version History** - Manual save version history with restore and delete support
-- **Note Sharing** - Generate share links for others to view
+- **Note Sharing** - Generate share links for others to view (XSS protection enabled)
 - **Markdown Editor** - WYSIWYG editor using Vditor
-- **Sidebar** - Collapsible sidebar with reusable components
+- **Sidebar** - Collapsible sidebar with resizable width
+- **Folder Detail Page** - View sub-categories and notes within a category
+- **Breadcrumb Navigation** - Show category path in note editor
 - **Work Log** - Auto-generate monthly work log template
 - **Snowflake ID** - Distributed ID generation using Yitter.IdGenerator
-- **Data Version** - Version field for version control on each record
 
 ## Tech Stack
 
@@ -31,15 +32,17 @@ A web-based Markdown note-taking application with note categorization, version h
 - Axios
 - Vue Router
 - Vditor (Markdown editor)
+- DOMPurify (XSS protection)
 
 ### Backend
 
-- ASP.NET Core 9.0
+- ASP.NET Core 10.0
 - Entity Framework Core
 - MySQL
 - JWT Authentication
 - Yitter.IdGenerator (Snowflake ID)
 - BCrypt.Net-Next (Password hashing)
+- Rate Limiting
 
 ## Project Structure
 
@@ -56,6 +59,7 @@ test-md/
 │   │   │   ├── Register.vue     # Registration page
 │   │   │   ├── Home.vue         # Notes list home page
 │   │   │   ├── NoteEditorVditor.vue # Markdown editor
+│   │   │   ├── FolderDetail.vue  # Category detail page
 │   │   │   └── Shared.vue       # Shared note page
 │   │   ├── router/              # Router configuration
 │   │   ├── main.js              # Entry file
@@ -65,7 +69,7 @@ test-md/
 │   ├── package.json
 │   └── vite.config.js           # Vite configuration
 │
-├── server-dotnet/              # Backend (.NET 9.0)
+├── server-dotnet/               # Backend (.NET 10.0)
 │   ├── Controllers/             # API Controllers
 │   │   ├── AuthController.cs   # Authentication
 │   │   ├── NotesController.cs   # Notes API
@@ -80,10 +84,14 @@ test-md/
 │   │   └── AppDbContext.cs
 │   ├── DTOs/                   # Data Transfer Objects
 │   │   └── AuthDtos.cs
+│   ├── Middleware/             # Middleware
+│   │   └── GlobalExceptionHandler.cs
 │   ├── Converters/             # JSON Converters
 │   │   ├── LongToStringConverter.cs
 │   │   └── DateTimeOffsetConverter.cs
-│   ├── appsettings.json        # Configuration file
+│   ├── Constants/             # Application Constants
+│   │   └── AppConstants.cs
+│   ├── appsettings.json       # Configuration file
 │   └── Program.cs              # Entry file
 │
 ├── README.md                   # Chinese README
@@ -97,7 +105,7 @@ test-md/
 
 - Node.js 18+
 - pnpm 9+
-- .NET SDK 9.0+
+- .NET SDK 10.0+
 - MySQL 5.7+
 
 ### Installation
@@ -120,33 +128,30 @@ dotnet restore
 CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. **Environment Variables** - Copy `.env.example` to `.env` and configure:
-
-```bash
-cd server-dotnet
-cp .env.example .env
-```
+2. **Environment Variables** - Set the following environment variables:
 
 Key configurations:
 - `DB_CONNECTION_STRING` - Database connection string
-- `JWT_SECRET` - JWT secret (use a long random string in production)
-- `ASPNETCORE_ENVIRONMENT` - Runtime environment (Development/Production)
+- `JWT_SECRET` - JWT secret (use a long random string in production, at least 32 characters)
+- `CORS_ALLOWED_ORIGINS` - CORS allowed frontend origins (comma-separated for multiple)
 
 3. **Backend Configuration** (`server-dotnet/appsettings.json`):
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Port=3306;Database=markdown_notes;User=root;Password=your_password;"
+    "DefaultConnection": "${DB_CONNECTION_STRING}"
   },
   "Jwt": {
-    "Secret": "your-secret-key-change-in-production"
+    "Secret": "${JWT_SECRET}"
   },
-  "SnowflakeId": {
-    "BaseTime": "2026-01-01 00:00:00"
+  "CORS": {
+    "AllowedOrigins": "${CORS_ALLOWED_ORIGINS}"
   }
 }
 ```
+
+**Important**: Always configure sensitive information via environment variables in production. Do not use hardcoded defaults.
 
 ### Start Development Servers
 
@@ -164,7 +169,7 @@ pnpm dev
 
 ### Initialize Database
 
-On first run, the endpoint `/api/init` can be used to initialize the database schema (if using EF Core migrations).
+Database tables are automatically created on first run.
 
 ### Build for Production
 
@@ -187,6 +192,7 @@ dotnet publish -c Release
 |--------|------|-------------|
 | POST | /api/auth/register | User registration |
 | POST | /api/auth/login | User login |
+| POST | /api/auth/logout | User logout |
 | GET | /api/auth/me | Get current user info |
 
 ### Notes
@@ -247,15 +253,13 @@ API response format:
 - `long` type IDs are returned as strings (e.g., `"id": "785339216482373"`)
 - `DateTime` is formatted as `yyyy-MM-dd HH:mm:ss`
 
-## Screenshots
+## Security Features
 
-> Screenshots will be added in future versions
-
-Main interfaces:
-- **Notes List** - Display all notes with search and category filtering
-- **Category Management** - Tree structure with drag-and-drop reordering
-- **Markdown Editor** - Vditor WYSIWYG editing
-- **Note Sharing** - One-click share link generation
+- JWT tokens stored in HttpOnly Cookie to prevent XSS attacks
+- Passwords encrypted using BCrypt
+- Shared content sanitized with DOMPurify to prevent XSS
+- Rate limiting enabled (5 requests/minute for auth endpoints)
+- CORS cross-origin policy configured
 
 ## Contributing
 
