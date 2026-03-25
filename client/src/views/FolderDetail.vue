@@ -522,7 +522,8 @@ const confirmDeleteChild = (child) => {
 }
 
 const openAddChildFolder = (parentFolder) => {
-  router.push(`/folder/${parentFolder.id}`)
+  newChildFolderName.value = ''
+  showAddChildDialog.value = true
 }
 
 const createNoteInFolder = async (folder) => {

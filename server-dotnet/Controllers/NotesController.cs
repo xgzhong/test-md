@@ -62,10 +62,8 @@ public class NotesController : BaseController
             query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
         }
 
-        // 计算全部笔记数量（用于"全部笔记"显示）
-        var totalCount = await _context.Notes
-            .Where(n => n.UserId == userId && !n.IsDeleted)
-            .CountAsync();
+        // 优化：一次查询获取笔记和总数
+        var totalCount = await query.CountAsync();
 
         var notes = await query
             .OrderByDescending(n => n.UpdatedAt)
@@ -201,7 +199,18 @@ public class NotesController : BaseController
 
         if (request.Title != null) note.Title = request.Title;
         if (request.Content != null) note.Content = request.Content;
-        if (request.FolderId != null) note.FolderId = request.FolderId == -1 ? null : request.FolderId;
+        if (request.FolderId != null)
+        {
+            // 支持 -1 表示移除分类（未分类）
+            if (request.FolderId == "-1" || request.FolderId == "")
+            {
+                note.FolderId = null;
+            }
+            else if (long.TryParse(request.FolderId, out var fid))
+            {
+                note.FolderId = fid;
+            }
+        }
 
         // 每次保存都更新版本号为新的雪花ID
         note.Version = YitIdHelper.NextId();

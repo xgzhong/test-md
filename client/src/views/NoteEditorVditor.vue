@@ -2,15 +2,15 @@
   <div class="main-layout" @click="handleOutsideClick" @keydown="handleKeydown">
     <!-- 侧边栏 -->
     <Sidebar
-      :collapsed="false"
+      :collapsed="sidebarCollapsed"
       :width="sidebarWidth"
       :folders="folders"
-      :notes="notes"
       :currentFolder="currentFolder"
       :showAddFolder="false"
       :showPin="false"
       :showEdit="false"
       :showDelete="false"
+      @toggle="toggleSidebar"
       @select="handleSelectFolder"
       @openNote="handleOpenNote"
       @update:width="sidebarWidth = $event"
@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back } from '@element-plus/icons-vue'
@@ -169,6 +169,11 @@ const AUTO_SAVE_MIN_CONTENT_DELTA = 100
 
 // 侧边栏宽度
 const sidebarWidth = ref(380)
+const sidebarCollapsed = ref(false)
+
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
 
 // 笔记数据
 const note = reactive({
@@ -203,7 +208,6 @@ const original = reactive({
 
 // 分类列表
 const folders = ref([])
-const notes = ref([])
 const noteVersions = ref([])
 const currentFolder = ref(null)
 
@@ -225,10 +229,6 @@ const charCount = computed(() => {
 const noteFolderId = computed({
   get: () => note.folderId ?? '',
   set: (val) => { note.folderId = val === '' ? null : val }
-})
-
-const renderedContent = computed(() => {
-  return marked(note.content || '')
 })
 
 // 构建面包屑路径 - 递归搜索树形结构
@@ -265,12 +265,8 @@ const breadcrumbPath = computed(() => {
 })
 
 // 点击面包屑项切换分类
-const handleBreadcrumbClick = (folder) => {
+const handleBreadcrumbClick = () => {
   router.push('/home')
-  // 触发切换到对应分类
-  nextTick(() => {
-    // Emit event to switch folder after navigation
-  })
 }
 
 const renderVersionContent = computed(() => {
@@ -299,9 +295,10 @@ const initVditor = (content, onReady) => {
 
   vditor = new Vditor('vditor', {
     value: content || '',
-    mode: 'wysiwyg',
+    mode: 'ir',
     placeholder: '在这里使用 Markdown 编写笔记...',
     lang: 'zh_CN',
+    tip: false,
     after: () => {
       if (onReady) onReady()
     },
@@ -331,28 +328,11 @@ const initVditor = (content, onReady) => {
       'preview',
       'fullscreen'
     ],
-    customWysiwygToolbar: () => [],
+    customWysiwygToolbar: function() { return [] },
     toolbarConfig: {
       pin: true
     },
-    upload: {
-      accept: 'image/*',
-      handler: async (files) => {
-        const file = files[0]
-        if (!file) return
-
-        try {
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const base64 = e.target.result
-            vditor.insertValue(`![${file.name}](${base64})`)
-          }
-          reader.readAsDataURL(file)
-        } catch (error) {
-          ElMessage.error('图片上传失败')
-        }
-      }
-    },
+    valueType: 'markdown',
     input: (value) => {
       note.content = value
       handleInput()
@@ -406,15 +386,6 @@ const loadFolders = async () => {
     folders.value = res.folders
   } catch (error) {
     ElMessage.error(error.message)
-  }
-}
-
-const loadNotes = async () => {
-  try {
-    const res = await notesAPI.getAll({})
-    notes.value = res.notes || []
-  } catch (error) {
-    console.error('加载笔记失败:', error)
   }
 }
 
@@ -717,6 +688,12 @@ const handleGoHome = async () => {
 
 // 处理键盘快捷键
 const handleKeydown = (event) => {
+  // Ctrl + S 保存笔记
+  if (event.ctrlKey && event.key === 's') {
+    event.preventDefault()
+    manualSave()
+    return
+  }
   // Escape 键返回
   if (event.key === 'Escape') {
     handleGoHome()
@@ -758,7 +735,6 @@ onMounted(() => {
       loadNote()
     })
     loadFolders()
-    loadNotes()
     loadVersions()
   }
 })

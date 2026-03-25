@@ -37,7 +37,7 @@ public record UserResponse(UserDto User);
 // Note DTOs
 public record NoteDto(long Id, long? FolderId, string? FolderName, string Title, string Content, bool IsShared, string? ShareToken, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public record CreateNoteRequest(string? Title, string? Content, long? FolderId);
-public record UpdateNoteRequest(string? Title, string? Content, long? FolderId, bool SaveVersion = false);
+public record UpdateNoteRequest(string? Title, string? Content, string? FolderId, bool SaveVersion = false);
 public record NoteResponse(string Message, NoteDto? Note = null);
 public record NotesResponse(List<NoteDto> Notes, int TotalCount = 0);
 public record ShareResponse(string Message, string ShareUrl);

@@ -54,6 +54,8 @@ test-md/
 │   │   ├── components/           # Reusable components
 │   │   │   ├── Sidebar.vue       # Sidebar component
 │   │   │   └── FolderTreeItem.vue # Folder tree component
+│   │   ├── composables/          # Composable functions
+│   │   │   └── useCommon.js     # Common composables
 │   │   ├── views/               # Page components
 │   │   │   ├── Login.vue        # Login page
 │   │   │   ├── Register.vue     # Registration page

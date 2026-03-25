@@ -5,6 +5,7 @@ import Home from '../views/Home.vue'
 import NoteEditorVditor from '../views/NoteEditorVditor.vue'
 import Shared from '../views/Shared.vue'
 import FolderDetail from '../views/FolderDetail.vue'
+import { authAPI } from '../api'
 
 const routes = [
   {
@@ -51,13 +52,27 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
-  // Check auth status via API or localStorage flag
+// 路由守卫 - 使用 API 验证 token 有效性
+router.beforeEach(async (to, from, next) => {
+  // 检查 localStorage 标记作为快速判断
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
 
-  if (to.meta.requiresAuth && !isLoggedIn) {
-    next('/login')
+  if (to.meta.requiresAuth) {
+    if (!isLoggedIn) {
+      next('/login')
+      return
+    }
+
+    // 验证 token 有效性
+    try {
+      await authAPI.getUser()
+      next()
+    } catch (error) {
+      // Token 无效，清除登录状态
+      localStorage.removeItem('isLoggedIn')
+      localStorage.removeItem('user')
+      next('/login')
+    }
   } else if ((to.path === '/login' || to.path === '/register') && isLoggedIn) {
     next('/home')
   } else {

@@ -36,10 +36,10 @@ public class FoldersController : BaseController
         // 优化：一次查询获取所有文件夹的笔记数量，避免 N+1 问题
         var folderIds = folders.Select(f => f.Id).ToList();
         var noteCounts = await _context.Notes
-            .Where(n => folderIds.Contains(n.FolderId ?? 0) && n.UserId == userId && !n.IsDeleted)
+            .Where(n => n.UserId == userId && !n.IsDeleted && n.FolderId != null && folderIds.Contains(n.FolderId.Value))
             .GroupBy(n => n.FolderId)
             .Select(g => new { FolderId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.FolderId ?? 0, x => x.Count);
+            .ToDictionaryAsync(x => x.FolderId!.Value, x => x.Count);
 
         var foldersWithCount = folders.Select(folder => new FolderDto(
             folder.Id,
@@ -203,7 +203,9 @@ public class FoldersController : BaseController
         var folderIdsToDelete = foldersToDelete.Select(f => f.Id).ToHashSet();
 
         // Move notes to uncategorized
-        var notes = await _context.Notes.Where(n => folderIdsToDelete.Contains(n.FolderId ?? 0)).ToListAsync();
+        var notes = await _context.Notes
+            .Where(n => n.FolderId != null && folderIdsToDelete.Contains(n.FolderId.Value))
+            .ToListAsync();
         foreach (var note in notes)
         {
             note.FolderId = null;

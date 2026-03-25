@@ -54,6 +54,8 @@ test-md/
 │   │   ├── components/           # 可复用组件
 │   │   │   ├── Sidebar.vue       # 侧边栏组件
 │   │   │   └── FolderTreeItem.vue # 分类树组件
+│   │   ├── composables/          # 组合式函数
+│   │   │   └── useCommon.js     # 通用组合式函数
 │   │   ├── views/               # 页面组件
 │   │   │   ├── Login.vue        # 登录页面
 │   │   │   ├── Register.vue     # 注册页面

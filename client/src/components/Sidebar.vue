@@ -162,7 +162,9 @@ const emit = defineEmits([
   'dragleave',
   'drop',
   'update:width',
-  'titleClick'
+  'titleClick',
+  'addChildFolder',
+  'addNote'
 ])
 
 // 展开状态 - 使用对象替代 Set 以便 Vue 更好地追踪变化
