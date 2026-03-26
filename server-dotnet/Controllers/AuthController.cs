@@ -157,11 +157,14 @@ public class AuthController : BaseController
 
     private void SetAuthCookie(string token)
     {
+        // 判断是否为 HTTPS 或本地开发环境
+        var isSecure = Request.Scheme == "https" || Request.Host.Host == "localhost" || Request.Host.Host == "127.0.0.1";
         Response.Cookies.Append("auth_token", token, new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
+            Secure = isSecure,
+            SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
+            Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(AppConstants.TokenExpirationDays)
         });
     }

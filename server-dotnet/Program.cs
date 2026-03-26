@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -139,6 +140,12 @@ if (app.Environment.IsDevelopment())
 // Enable static file serving from wwwroot
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// 添加 ForwardedHeaders 以支持反向代理（nginx）传递 HTTPS
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 // Enable CORS
 app.UseCors("Restrictive");
