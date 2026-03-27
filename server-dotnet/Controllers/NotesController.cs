@@ -57,7 +57,7 @@ public class NotesController : BaseController
             query = query.Where(n => n.FolderId == null);
         }
 
-        if (!string.IsNullOrEmpty(search))
+        if (!string.IsNullOrEmpty(search) && search.Length <= 100)
         {
             query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
         }

@@ -107,7 +107,7 @@
               <h3>{{ note.title }}</h3>
               <el-icon class="delete-icon" @click.stop="confirmDelete(note)"><Delete /></el-icon>
             </div>
-            <p>{{ note.content || '暂无内容' }}</p>
+            <p v-html="note.content ? escapeHtml(note.content) : '暂无内容'"></p>
             <div class="note-meta">
               <span>{{ formatDate(note.updatedAt) }}</span>
               <el-tag v-if="note.isShared" size="small" type="success" style="margin-left: 10px;">
@@ -135,6 +135,38 @@
         <el-button type="primary" @click="createChildFolder">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 修改分类对话框 -->
+    <el-dialog v-model="showEditFolderDialog" title="修改分类" width="400px" @opened="editFolderInputRef?.focus()">
+      <el-form @submit.prevent="updateFolderName">
+        <el-form-item label="分类名称">
+          <el-input
+            ref="editFolderInputRef"
+            v-model="editFolderForm.name"
+            placeholder="分类名称"
+            @keyup.enter="updateFolderName"
+          />
+        </el-form-item>
+        <el-form-item label="父级分类">
+          <el-select v-model="editFolderForm.parentId" placeholder="顶级分类（无父级）" clearable style="width: 100%">
+            <el-option
+              v-for="folder in folders"
+              :key="folder.id"
+              :label="'└ ' + folder.name"
+              :value="folder.id"
+              :disabled="folder.id === editFolderForm.id"
+            />
+          </el-select>
+          <div style="margin-top: 5px; font-size: 12px; color: #909399;">
+            清空选择可将分类移至顶级
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditFolderDialog = false">取消</el-button>
+        <el-button type="primary" @click="updateFolderName">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -142,9 +174,10 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Plus, Delete, FolderAdd, Folder } from '@element-plus/icons-vue'
+import { Back, Delete, Folder } from '@element-plus/icons-vue'
 import { notesAPI, foldersAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
+import { flattenFolders, getParentIdStr, isSameParentId, isDescendant, formatDate, escapeHtml } from '../utils/useCommon'
 
 const router = useRouter()
 const route = useRoute()
@@ -174,6 +207,13 @@ const isLevelChange = computed(() => {
 
 const showAddChildDialog = ref(false)
 const newChildFolderName = ref('')
+const showEditFolderDialog = ref(false)
+const editFolderInputRef = ref(null)
+const editFolderForm = reactive({
+  id: null,
+  name: '',
+  parentId: null
+})
 
 // 获取当前分类的子分类
 const childFolders = computed(() => {
@@ -286,7 +326,9 @@ const createNoteInCurrentFolder = async () => {
       content: '',
       folderId: route.params.id
     })
-    router.push(`/note/${res.note.id}`)
+    if (res?.note?.id) {
+      router.push(`/note/${res.note.id}`)
+    }
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -332,17 +374,6 @@ const editNote = (id) => {
   router.push(`/note/${id}`)
 }
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr + 'Z')
-  return date.toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
 // 拖拽相关
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
@@ -369,21 +400,6 @@ const onDragLeave = () => {
   dragOverFolder.value = null
 }
 
-const flattenFolders = (folderList) => {
-  const result = []
-  const flatten = (items, parentId = '0') => {
-    for (const item of items) {
-      const pid = item.parentId ? String(item.parentId) : '0'
-      result.push({ ...item, parentId: pid })
-      if (item.children && item.children.length > 0) {
-        flatten(item.children, String(item.id))
-      }
-    }
-  }
-  flatten(folderList)
-  return result
-}
-
 const onDrop = async (event, targetFolder) => {
   const dragged = draggedFolder.value
   draggedFolder.value = null
@@ -398,34 +414,9 @@ const onDrop = async (event, targetFolder) => {
 
   if (!draggedItem || !targetItem) return
 
-  const isRootId = (id) => {
-    const strId = String(id)
-    return strId === '0' || strId === '' || strId === 'null' || strId === 'undefined' || id === null || id === undefined
-  }
-
-  const getParentIdStr = (id) => {
-    if (id === null || id === undefined) return '0'
-    const strId = String(id)
-    return isRootId(strId) ? '0' : strId
-  }
-
-  const isDescendant = (parent, childId) => {
-    const parentIdStr = String(parent.id)
-    const children = flatFolders.filter(f => String(f.parentId) === parentIdStr)
-    for (const child of children) {
-      if (String(child.id) === String(childId)) return true
-      if (isDescendant(child, childId)) return true
-    }
-    return false
-  }
-
-  if (isDescendant(draggedItem, targetFolder.id)) {
+  if (isDescendant(draggedItem, targetFolder.id, flatFolders)) {
     ElMessage.warning('不能将分类拖拽到其子分类下')
     return
-  }
-
-  const isSameParentId = (id1, id2) => {
-    return getParentIdStr(id1) === getParentIdStr(id2)
   }
 
   const isSameLevel = isSameParentId(draggedItem.parentId, targetFolder.parentId)
@@ -481,8 +472,33 @@ const togglePinFolder = async (folder) => {
 }
 
 const editFolderName = (folder) => {
-  // Navigate to home or show edit dialog
-  router.push('/home')
+  editFolderForm.id = folder.id
+  editFolderForm.name = folder.name
+  // parentId 为 '0' 或 0 时表示顶级分类，显示为空
+  const pid = folder.parentId ? String(folder.parentId) : '0'
+  editFolderForm.parentId = pid === '0' ? null : folder.parentId
+  showEditFolderDialog.value = true
+}
+
+const updateFolderName = async () => {
+  if (!editFolderForm.name.trim()) {
+    ElMessage.warning('请输入分类名称')
+    return
+  }
+
+  try {
+    // 如果 parentId 为 null/undefined（用户清空了选择），发送 '0' 表示移除父级
+    const parentIdValue = (editFolderForm.parentId === null || editFolderForm.parentId === undefined) ? '0' : editFolderForm.parentId
+    await foldersAPI.update(editFolderForm.id, {
+      name: editFolderForm.name,
+      parentId: parentIdValue
+    })
+    ElMessage.success('分类修改成功')
+    showEditFolderDialog.value = false
+    loadFolders()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
 }
 
 const confirmDeleteFolder = (folder) => {
@@ -533,7 +549,9 @@ const createNoteInFolder = async (folder) => {
       content: '',
       folderId: folder.id
     })
-    router.push(`/note/${res.note.id}`)
+    if (res?.note?.id) {
+      router.push(`/note/${res.note.id}`)
+    }
   } catch (error) {
     ElMessage.error(error.message)
   }

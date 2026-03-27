@@ -75,7 +75,7 @@
         </div>
       </div>
 
-      <div class="editor-container">
+      <div class="editor-container" :class="{ 'wide-mode': isWideMode }">
         <div id="vditor" class="vditor-editor"></div>
       </div>
 
@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back } from '@element-plus/icons-vue'
@@ -165,14 +165,21 @@ const route = useRoute()
 
 // Constants
 const AUTO_SAVE_DEBOUNCE_MS = 3000
-const AUTO_SAVE_MIN_CONTENT_DELTA = 100
 
 // 侧边栏宽度
 const sidebarWidth = ref(380)
 const sidebarCollapsed = ref(false)
 
+// 宽屏模式
+const isWideMode = ref(false)
+
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 切换宽屏模式
+const toggleWideMode = () => {
+  isWideMode.value = !isWideMode.value
 }
 
 // 笔记数据
@@ -188,6 +195,7 @@ const note = reactive({
 
 // 标记是否正在执行程序化导航（避免路由守卫重复确认）
 let isProgrammaticNavigation = false
+let isNoteLoaded = false
 
 // UI 状态
 const ui = reactive({
@@ -212,9 +220,10 @@ const noteVersions = ref([])
 const currentFolder = ref(null)
 
 let vditor = null
-let saveTimer = null
 let savedTipTimer = null
 let inputTimer = null
+let isMounted = true
+let currentNoteId = null
 
 const wordCount = computed(() => {
   const text = note.content.replace(/[#*`\[\]()]/g, '').trim()
@@ -326,9 +335,15 @@ const initVditor = (content, onReady) => {
       '|',
       'wysiwyg',
       'preview',
-      'fullscreen'
+      'fullscreen',
+      '|',
+      {
+        icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 6h16v2H4V6m0 5h16v2H4v-2m0 5h16v2H4v-2"/></svg>',
+        click: () => {
+          toggleWideMode()
+        }
+      }
     ],
-    customWysiwygToolbar: function() { return [] },
     toolbarConfig: {
       pin: true
     },
@@ -339,29 +354,34 @@ const initVditor = (content, onReady) => {
     },
     blur: () => {
       handleBlur()
-    },
-    ready: () => {}
+    }
   })
 }
 
 const updateVditor = (content) => {
-  if (vditor) {
-    vditor.setValue(content || '')
+  if (vditor && content !== undefined && content !== null) {
+    vditor.setValue(String(content))
   }
 }
 
 const loadNote = async () => {
   try {
     const res = await withRetry(() => notesAPI.getById(note.id))
+    // Ignore if route changed while request was in flight
+    if (currentNoteId !== note.id) return
+
+    // Store the content in a local variable first
+    const content = res.note.content || ''
+
     note.data = res.note
     note.title = res.note.title
-    note.content = res.note.content
+    note.content = content
     note.folderId = res.note.folderId
     note.version = parseInt(res.note.version) || 0
     note.isShared = res.note.isShared || false
 
     original.title = res.note.title || ''
-    original.content = res.note.content || ''
+    original.content = content
 
     note.isNew = note.version === 0
 
@@ -371,12 +391,19 @@ const loadNote = async () => {
 
     ui.hasUnsavedChanges = false
 
-    if (vditor) {
-      updateVditor(res.note.content || '')
-    }
+    // Use nextTick and setTimeout to ensure vditor is fully initialized before setting content
+    await nextTick()
+    setTimeout(() => {
+      if (vditor && content !== undefined) {
+        vditor.setValue(content)
+      }
+      isNoteLoaded = true
+    }, 300)
   } catch (error) {
-    ElMessage.error(error.message)
-    router.push('/home')
+    if (currentNoteId === note.id) {
+      ElMessage.error(error.message)
+      router.push('/home')
+    }
   }
 }
 
@@ -392,9 +419,13 @@ const loadFolders = async () => {
 const loadVersions = async () => {
   try {
     const res = await withRetry(() => notesAPI.getVersions(note.id))
+    // Ignore if route changed while request was in flight
+    if (currentNoteId !== note.id) return
     noteVersions.value = res.versions
   } catch (error) {
-    ElMessage.error(error.message)
+    if (currentNoteId === note.id) {
+      ElMessage.error(error.message)
+    }
   }
 }
 
@@ -421,7 +452,7 @@ const saveNote = async () => {
     ui.showSavedTip = true
     if (savedTipTimer) clearTimeout(savedTipTimer)
     savedTipTimer = setTimeout(() => {
-      ui.showSavedTip = false
+      if (isMounted) ui.showSavedTip = false
     }, 2000)
   } catch (error) {
     ElMessage.error(error.message)
@@ -448,7 +479,7 @@ const manualSave = async () => {
     ui.showSavedTip = true
     if (savedTipTimer) clearTimeout(savedTipTimer)
     savedTipTimer = setTimeout(() => {
-      ui.showSavedTip = false
+      if (isMounted) ui.showSavedTip = false
     }, 2000)
     ElMessage.success('保存成功')
   } catch (error) {
@@ -461,8 +492,8 @@ const handleInput = () => {
 
   if (inputTimer) clearTimeout(inputTimer)
   inputTimer = setTimeout(() => {
-    const contentDelta = Math.abs(note.content.length - original.content.length)
-    const hasSignificantChange = contentDelta > AUTO_SAVE_MIN_CONTENT_DELTA || note.title !== original.title
+    if (!isMounted) return
+    const hasSignificantChange = note.title !== original.title || note.content !== original.content
     if (hasSignificantChange) {
       saveNote()
     }
@@ -562,7 +593,9 @@ const confirmDeleteVersion = (v) => {
 
 // 统一的离开确认逻辑
 const confirmBeforeLeave = async () => {
-  if (note.version === 0) {
+  // 只有在笔记已加载且确实是新的空笔记时才删除
+  // isNoteLoaded 防止误删正在加载中的已有笔记
+  if (isNoteLoaded && note.version === 0) {
     const hasChanges = note.title !== original.title || note.content !== original.content
     if (!hasChanges) {
       try {
@@ -587,7 +620,7 @@ const confirmBeforeLeave = async () => {
         resolve(true)
       }).catch(async (action) => {
         if (action === 'cancel') {
-          if (note.version === 0) {
+          if (isNoteLoaded && note.version === 0) {
             try {
               await withRetry(() => notesAPI.delete(note.id))
             } catch (error) {
@@ -628,7 +661,7 @@ const handleSelectFolder = async () => {
                            ui.hasUnsavedChanges
 
   if (!currentHasChanges) {
-    if (note.version === 0 && !note.title && !note.content) {
+    if (isNoteLoaded && note.version === 0 && !note.title && !note.content) {
       await navigateToHome(false, true)
     } else {
       await navigateToHome(false, false)
@@ -645,7 +678,7 @@ const handleSelectFolder = async () => {
     await navigateToHome(true, false)
   }).catch((action) => {
     if (action === 'cancel') {
-      navigateToHome(false, note.version === 0)
+      navigateToHome(false, isNoteLoaded && note.version === 0)
     }
   })
 }
@@ -664,7 +697,7 @@ const handleGoHome = async () => {
                            ui.hasUnsavedChanges
 
   if (!currentHasChanges) {
-    if (note.version === 0 && !note.title && !note.content) {
+    if (isNoteLoaded && note.version === 0 && !note.title && !note.content) {
       await navigateToHome(false, true)
     } else {
       await navigateToHome(false, false)
@@ -681,7 +714,7 @@ const handleGoHome = async () => {
     await navigateToHome(true, false)
   }).catch((action) => {
     if (action === 'cancel') {
-      navigateToHome(false, note.version === 0)
+      navigateToHome(false, isNoteLoaded && note.version === 0)
     }
   })
 }
@@ -729,30 +762,56 @@ const handleOutsideClick = (event) => {
 }
 
 onMounted(() => {
-  note.id = route.params.id
-  if (note.id) {
+  const noteId = route.params.id
+  if (noteId) {
+    note.id = noteId
+    currentNoteId = noteId
+    isNoteLoaded = false
     initVditor('', () => {
-      loadNote()
+      setTimeout(() => {
+        loadNote()
+      }, 500)
     })
     loadFolders()
     loadVersions()
   }
+
+  // Pause auto-save when tab is hidden
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
+
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    // Pause auto-save when tab is hidden
+    if (inputTimer) {
+      clearTimeout(inputTimer)
+      inputTimer = null
+    }
+  } else {
+    // Resume: trigger save check when tab becomes visible
+    if (ui.hasUnsavedChanges) {
+      handleInput()
+    }
+  }
+}
 
 watch(() => route.params.id, (newId) => {
   if (newId) {
+    currentNoteId = newId
     note.id = newId
+    isNoteLoaded = false
     loadNote()
     loadVersions()
   }
 })
 
 onBeforeUnmount(() => {
+  isMounted = false
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (vditor) {
     vditor.destroy()
     vditor = null
   }
-  if (saveTimer) clearTimeout(saveTimer)
   if (inputTimer) clearTimeout(inputTimer)
   if (savedTipTimer) clearTimeout(savedTipTimer)
 })
@@ -831,6 +890,12 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 
+.editor-container.wide-mode {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
 .vditor-editor {
   flex: 1;
   border: 1px solid #e4e7ed;
@@ -871,6 +936,7 @@ onBeforeUnmount(() => {
 
 :deep(.vditor-toolbar) {
   border-bottom: 1px solid #e4e7ed;
+  justify-content: flex-start !important;
 }
 
 :deep(.vditor-content) {
@@ -883,5 +949,21 @@ onBeforeUnmount(() => {
   padding: 20px;
   font-size: 15px;
   line-height: 1.6;
+}
+
+:deep(.vditor-toolbar--pin) {
+  padding-left: 50px !important;
+  padding-right: 50px !important;
+}
+
+:deep(.vditor-reset) {
+  padding-left: 50px !important;
+  padding-right: 50px !important;
+}
+
+.editor-container:not(.wide-mode) :deep(.vditor-toolbar--pin),
+.editor-container:not(.wide-mode) :deep(.vditor-reset) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 </style>

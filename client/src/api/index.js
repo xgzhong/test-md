@@ -1,4 +1,5 @@
 import axios from 'axios'
+import router from '../router'
 
 const api = axios.create({
   baseURL: '/api',
@@ -48,7 +49,8 @@ api.interceptors.response.use(
         // Clear auth cookie on unauthorized
         clearAuthCookie()
         localStorage.removeItem('user')
-        window.location.href = '/login'
+        localStorage.removeItem('isLoggedIn')
+        router.push('/login')
       } else if (status === 429) {
         // Rate limiting
         return Promise.reject(new Error('请求过于频繁，请稍后再试'))

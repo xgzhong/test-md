@@ -92,7 +92,7 @@
               <h3>{{ note.title }}</h3>
               <el-icon class="delete-icon" @click.stop="confirmDelete(note)"><Delete /></el-icon>
             </div>
-            <p>{{ note.content || '暂无内容' }}</p>
+            <p v-html="note.content ? escapeHtml(note.content) : '暂无内容'"></p>
             <div class="note-meta">
               <span>{{ formatDate(note.updatedAt) }}</span>
               <el-tag v-if="note.isShared" size="small" type="success" style="margin-left: 10px;">
@@ -108,11 +108,9 @@
         <!-- 底部信息 -->
         <div class="footer">
           <p>
-            <span class="footer-link" @click="router.push('/home')">Markdown Notes App</span>
+            <span class="footer-link" @click="router.push('/home')">Markdown Notes</span>
             <span style="margin: 0 10px;">|</span>
             <a href="https://github.com/xgzhong/test-md" target="_blank" class="github-link">GitHub</a>
-            <span style="margin: 0 10px;">|</span>
-            <span>xgzhong</span>
           </p>
         </div>
       </div>
@@ -185,8 +183,10 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Delete, Fold, Expand, Edit } from '@element-plus/icons-vue'
+import DOMPurify from 'dompurify'
 import { notesAPI, foldersAPI, authAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
+import { flattenFolders, isRootId, getParentIdStr, isSameParentId, isDescendant, formatDate, escapeHtml } from '../utils/useCommon'
 
 const router = useRouter()
 
@@ -220,6 +220,7 @@ const showEditFolderDialog = ref(false)
 const sidebarCollapsed = ref(false)
 const folderInputRef = ref(null)
 const editFolderInputRef = ref(null)
+let searchTimer = null
 const folderForm = reactive({
   name: '',
   parentId: null
@@ -285,23 +286,6 @@ const onDragLeave = () => {
   dragOverFolder.value = null
 }
 
-// 扁平化文件夹列表（用于拖拽排序）
-const flattenFolders = (folderList) => {
-  const result = []
-  const flatten = (items, parentId = '0') => {
-    for (const item of items) {
-      // 保持 parentId 为字符串，0 表示根级别
-      const pid = item.parentId ? String(item.parentId) : '0'
-      result.push({ ...item, parentId: pid })
-      if (item.children && item.children.length > 0) {
-        flatten(item.children, String(item.id))
-      }
-    }
-  }
-  flatten(folderList)
-  return result
-}
-
 const onDrop = async (event, targetFolder) => {
   // 保存状态用于处理
   const dragged = draggedFolder.value
@@ -320,34 +304,7 @@ const onDrop = async (event, targetFolder) => {
 
   if (!draggedItem || !targetItem) return
 
-  // 判断是否在同一层级：比较父级ID，0/null/undefined 都视为根级别
-  const isRootId = (id) => {
-    const strId = String(id)
-    return strId === '0' || strId === '' || strId === 'null' || strId === 'undefined' || id === null || id === undefined
-  }
-
-  const getParentIdStr = (id) => {
-    if (id === null || id === undefined) return '0'
-    const strId = String(id)
-    return isRootId(strId) ? '0' : strId
-  }
-
-  const isSameParentId = (id1, id2) => {
-    return getParentIdStr(id1) === getParentIdStr(id2)
-  }
-
-  // 判断是否拖拽到了目标文件夹的子级（不允许）
-  const isDescendant = (parent, childId) => {
-    const parentIdStr = String(parent.id)
-    const children = flatFolders.filter(f => String(f.parentId) === parentIdStr)
-    for (const child of children) {
-      if (String(child.id) === String(childId)) return true
-      if (isDescendant(child, childId)) return true
-    }
-    return false
-  }
-
-  if (isDescendant(draggedItem, targetFolder.id)) {
+  if (isDescendant(draggedItem, targetFolder.id, flatFolders)) {
     ElMessage.warning('不能将分类拖拽到其子分类下')
     return
   }
@@ -439,7 +396,10 @@ const selectFolder = (folderId) => {
 }
 
 const handleSearch = () => {
-  loadNotes()
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    loadNotes()
+  }, 300)
 }
 
 const createNote = async () => {
@@ -448,7 +408,9 @@ const createNote = async () => {
       title: '无标题笔记',
       content: ''
     })
-    router.push(`/note/${res.note.id}`)
+    if (res?.note?.id) {
+      router.push(`/note/${res.note.id}`)
+    }
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -477,7 +439,8 @@ const createWorkLog = async () => {
     content += `${dateStr} ${weekDay}\n`
     content += '- 计划1：\n'
     content += '- 记录1：\n'
-    content += '- 记录2：\n\n'
+    content += '- 记录2：\n\n  '
+    content += '\n\n'
   }
 
   try {
@@ -486,7 +449,9 @@ const createWorkLog = async () => {
       content: content
     })
     ElMessage.success('工作日志生成成功')
-    router.push(`/note/${res.note.id}`)
+    if (res?.note?.id) {
+      router.push(`/note/${res.note.id}`)
+    }
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -553,7 +518,9 @@ const createNoteInFolder = async (folder) => {
     })
     ElMessage.success('笔记创建成功')
     // 跳转到笔记编辑页面
-    router.push(`/note/${res.note.id}`)
+    if (res?.note?.id) {
+      router.push(`/note/${res.note.id}`)
+    }
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -632,16 +599,6 @@ const logout = () => {
     localStorage.removeItem('isLoggedIn')
     router.push('/login')
   }).catch(() => {})
-}
-
-const formatDate = (dateStr) => {
-  const date = new Date(dateStr + 'Z')
-  return date.toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 const getFolderName = (folderId) => {

@@ -157,8 +157,9 @@ public class AuthController : BaseController
 
     private void SetAuthCookie(string token)
     {
-        // 判断是否为 HTTPS 或本地开发环境
-        var isSecure = Request.Scheme == "https" || Request.Host.Host == "localhost" || Request.Host.Host == "127.0.0.1";
+        // Only use Secure flag for HTTPS connections
+        // In production, the app should be behind a reverse proxy that sets the correct scheme
+        var isSecure = Request.Scheme == "https";
         Response.Cookies.Append("auth_token", token, new CookieOptions
         {
             HttpOnly = true,

@@ -68,10 +68,15 @@ router.beforeEach(async (to, from, next) => {
       await authAPI.getUser()
       next()
     } catch (error) {
-      // Token 无效，清除登录状态
-      localStorage.removeItem('isLoggedIn')
-      localStorage.removeItem('user')
-      next('/login')
+      // 只处理 401 错误（认证失败），其他错误（网络问题等）继续放行
+      if (error.response?.status === 401) {
+        localStorage.removeItem('isLoggedIn')
+        localStorage.removeItem('user')
+        next('/login')
+      } else {
+        // 网络错误或其他错误，允许访问，可能只是临时连接问题
+        next()
+      }
     }
   } else if ((to.path === '/login' || to.path === '/register') && isLoggedIn) {
     next('/home')
