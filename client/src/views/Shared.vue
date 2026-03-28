@@ -52,8 +52,7 @@ const loadSharedNote = async () => {
   try {
     loading.value = true
     const token = route.params.token
-    const res = await sharedAPI.getByToken(token)
-    note.value = res.note
+    note.value = await sharedAPI.getSharedNote(token)
   } catch (err) {
     error.value = '笔记不存在'
   } finally {

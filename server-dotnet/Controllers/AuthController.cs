@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using server_dotnet.Common.Result;
 using server_dotnet.Constants;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
@@ -30,20 +31,20 @@ public class AuthController : BaseController
 
     [HttpPost("register")]
     [EnableRateLimiting("auth")]
-    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         // Validation is handled by model validation, but we check for basic empty values
         if (string.IsNullOrWhiteSpace(request.Username) ||
             string.IsNullOrWhiteSpace(request.Email) ||
             string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest(new { error = "请填写完整信息" });
+            return ReturnResult(Result.Invalid("请填写完整信息"));
         }
 
         var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
         if (existingUser != null)
         {
-            return BadRequest(new { error = "邮箱已被注册" });
+            return ReturnResult(Result.Invalid("邮箱已被注册"));
         }
 
         var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password, BCrypt.Net.BCrypt.GenerateSalt(10));
@@ -71,31 +72,31 @@ public class AuthController : BaseController
         // Set HttpOnly cookie
         SetAuthCookie(token);
 
-        return StatusCode(201, new AuthResponse(
+        return ReturnResult(Result.Success(new AuthResponse(
             "注册成功",
             null,  // Token is in cookie, not body
             new UserDto(user.Id, user.Username, user.Email)
-        ));
+        )));
     }
 
     [HttpPost("login")]
     [EnableRateLimiting("auth")]
-    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest(new { error = "请填写邮箱和密码" });
+            return ReturnResult(Result.Invalid("请填写邮箱和密码"));
         }
 
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
         if (user == null)
         {
-            return BadRequest(new { error = "邮箱或密码错误" });
+            return ReturnResult(Result.Failure("邮箱或密码错误"));
         }
 
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
         {
-            return BadRequest(new { error = "邮箱或密码错误" });
+            return ReturnResult(Result.Failure("邮箱或密码错误"));
         }
 
         var token = GenerateToken(user.Id);
@@ -103,11 +104,11 @@ public class AuthController : BaseController
         // Set HttpOnly cookie
         SetAuthCookie(token);
 
-        return Ok(new AuthResponse(
+        return ReturnResult(Result.Success(new AuthResponse(
             "登录成功",
             null,  // Token is in cookie, not body
             new UserDto(user.Id, user.Username, user.Email)
-        ));
+        )));
     }
 
     [HttpPost("logout")]
@@ -115,25 +116,25 @@ public class AuthController : BaseController
     {
         // Clear the auth cookie
         Response.Cookies.Delete("auth_token");
-        return Ok(new { message = "注销成功" });
+        return ReturnResult(Result.Success("注销成功"));
     }
 
     [HttpGet("me")]
-    public async Task<ActionResult<UserResponse>> GetCurrentUser()
+    public async Task<IActionResult> GetCurrentUser()
     {
         var userId = GetUserId();
         if (userId == null)
         {
-            return Unauthorized(new { error = "请先登录" });
+            return ReturnResult(Result.Unauthorized());
         }
 
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            return Unauthorized(new { error = "用户不存在" });
+            return ReturnResult(Result.Unauthorized());
         }
 
-        return Ok(new UserResponse(new UserDto(user.Id, user.Username, user.Email)));
+        return ReturnResult(Result.Success(new UserDto(user.Id, user.Username, user.Email)));
     }
 
     private string GenerateToken(long userId)

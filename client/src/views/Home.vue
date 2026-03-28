@@ -89,7 +89,7 @@
               <h3>{{ note.title }}</h3>
               <el-icon class="delete-icon" @click.stop="confirmDelete(note)"><Delete /></el-icon>
             </div>
-            <p v-html="note.content ? escapeHtml(note.content) : '暂无内容'"></p>
+            <p v-text="note.content ? escapeHtml(note.content) : '暂无内容'"></p>
             <div class="note-meta">
               <span>{{ formatDate(note.updatedAt) }}</span>
               <el-tag v-if="note.isShared" size="small" type="success" style="margin-left: 10px;">已分享</el-tag>
@@ -176,8 +176,7 @@ const loadNotes = async () => {
     params.search = searchText.value
   }
   try {
-    // 先加载分类（用于显示笔记所属分类），再加载笔记
-    await sidebar.loadFolders()
+    // 笔记加载（分类已在 Sidebar 初始化时加载）
     await sidebar.loadNotes(params)
     notes.value = sidebar.notes.value
   } catch (error: any) {
@@ -249,7 +248,9 @@ const confirmDelete = async (note: Note) => {
     await ElMessageBox.confirm(`确定要删除笔记"${note.title}"吗？`, '提示', { type: 'warning' })
     await sidebar.deleteNote(note.id)
     await loadNotes()
-  } catch {}
+  } catch (e) {
+    // User cancelled - no action needed
+  }
 }
 
 const confirmDeleteFolder = async (folder: any) => {
@@ -259,7 +260,9 @@ const confirmDeleteFolder = async (folder: any) => {
     if (String(currentFolder.value) === String(folder.id)) {
       selectFolder(null)
     }
-  } catch {}
+  } catch (e) {
+    // User cancelled - no action needed
+  }
 }
 
 const openAddChildFolder = (parentFolder: any) => {
@@ -300,7 +303,9 @@ const logout = async () => {
   try {
     await ElMessageBox.confirm('确定要退出登录吗？', '提示', { type: 'warning' })
     await authStore.logout()
-  } catch {}
+  } catch (e) {
+    // User cancelled - no action needed
+  }
 }
 
 onMounted(() => {

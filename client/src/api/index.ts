@@ -2,58 +2,48 @@ import axios from 'axios'
 import router from '../router'
 
 // ============== Types ==============
+// Note: Backend returns all long/Long? types as strings (via LongToStringConverter)
 export interface User {
-  id: number
+  id: string
   username: string
   email: string
 }
 
 export interface Note {
-  id: number
-  folderId: number | null
+  id: string
+  folderId: string | null
   folderName: string | null
   title: string
   content: string
   isShared: boolean
   shareToken: string | null
-  version: number
+  version: string
   createdAt: string
   updatedAt: string
 }
 
 export interface Folder {
-  id: number
+  id: string
   name: string
-  parentId: number
+  parentId: string
   noteCount: number
   sortOrder: number
   isPinned: boolean
   children?: Folder[]
 }
 
-// API Response types
+export interface NoteVersion {
+  id: string
+  noteId: string
+  content: string
+  version: number
+  createdAt: string
+}
+
+// API Response types - backend returns unwrapped data via Result<T>.value
 export interface NotesResponse {
   notes: Note[]
   totalCount?: number
-}
-
-export interface NoteResponse {
-  note: Note
-}
-
-export interface FoldersResponse {
-  folders: Folder[]
-  uncategorizedCount?: number
-}
-
-export interface FolderResponse {
-  folder: Folder
-}
-
-export interface AuthResponse {
-  message: string
-  token: string | null
-  user: User | null
 }
 
 export interface ShareResponse {
@@ -63,14 +53,6 @@ export interface ShareResponse {
 
 export interface VersionsResponse {
   versions: NoteVersion[]
-}
-
-export interface NoteVersion {
-  id: number
-  noteId: number
-  content: string
-  version: number
-  createdAt: string
 }
 
 // Request types
@@ -88,13 +70,13 @@ export interface RegisterRequest {
 export interface CreateNoteRequest {
   title?: string
   content?: string
-  folderId?: number | null
+  folderId?: string | number | null
 }
 
 export interface UpdateNoteRequest {
   title?: string
   content?: string
-  folderId?: number | string | null
+  folderId?: string | number | null
   saveVersion?: boolean
 }
 
@@ -146,11 +128,25 @@ api.interceptors.request.use(
 
 // Response interceptor
 api.interceptors.response.use(
-  response => response,
+  response => {
+    // 统一解包 Result<T> 格式: { value, isSuccess, errors, status, message }
+    const res = response.data
+    if (res && typeof res === 'object' && 'isSuccess' in res) {
+      if (res.isSuccess) {
+        // 成功：解包 value 给前端使用
+        response.data = res.value
+      } else {
+        // 失败：抛出错误
+        const message = res.message || res.errors?.join(', ') || '请求失败'
+        return Promise.reject(new Error(message))
+      }
+    }
+    return response
+  },
   error => {
     if (error.response) {
       const { status, data } = error.response
-      const message = data?.error || '请求失败'
+      const message = data?.message || data?.error?.message || '请求失败'
 
       if (status === 401) {
         clearAuthCookie()
@@ -169,10 +165,10 @@ api.interceptors.response.use(
 
 // ============== API Methods ==============
 
-// Auth API
+// Auth API - login/register return { message, token?, user? } directly in value
 export const authAPI = {
-  login: (data: LoginRequest): Promise<AuthResponse> =>
-    api.post<AuthResponse>('/auth/login', data).then(res => res.data),
+  login: (data: LoginRequest): Promise<{ message: string; token: string | null; user: User | null }> =>
+    api.post('/auth/login', data).then(res => res.data),
 
   register: (data: RegisterRequest): Promise<{ message: string }> =>
     api.post('/auth/register', data).then(res => res.data),
@@ -181,66 +177,66 @@ export const authAPI = {
     api.post('/auth/logout').then(() => undefined),
 
   getUser: (): Promise<User> =>
-    api.get<User>('/auth/me').then(res => res.data)
+    api.get('/auth/me').then(res => res.data)
 }
 
-// Notes API
+// Notes API - returns Note directly, not wrapped
 export const notesAPI = {
   getNotes: (params?: Record<string, string | number | undefined>): Promise<NotesResponse> =>
-    api.get<NotesResponse>('/notes', { params }).then(res => res.data),
+    api.get('/notes', { params }).then(res => res.data),
 
-  getNote: (id: number): Promise<NoteResponse> =>
-    api.get<NoteResponse>(`/notes/${id}`).then(res => res.data),
+  getNote: (id: string): Promise<Note> =>
+    api.get(`/notes/${id}`).then(res => res.data),
 
-  createNote: (data: CreateNoteRequest): Promise<NoteResponse> =>
-    api.post<NoteResponse>('/notes', data).then(res => res.data),
+  createNote: (data: CreateNoteRequest): Promise<Note> =>
+    api.post('/notes', data).then(res => res.data),
 
-  updateNote: (id: number, data: UpdateNoteRequest): Promise<NoteResponse> =>
-    api.put<NoteResponse>(`/notes/${id}`, data).then(res => res.data),
+  updateNote: (id: string, data: UpdateNoteRequest): Promise<Note> =>
+    api.put(`/notes/${id}`, data).then(res => res.data),
 
-  deleteNote: (id: number): Promise<void> =>
+  deleteNote: (id: string): Promise<void> =>
     api.delete(`/notes/${id}`).then(() => undefined),
 
-  shareNote: (id: number): Promise<ShareResponse> =>
-    api.post<ShareResponse>(`/notes/${id}/share`).then(res => res.data),
+  shareNote: (id: string): Promise<ShareResponse> =>
+    api.post(`/notes/${id}/share`).then(res => res.data),
 
-  unshareNote: (id: number): Promise<void> =>
+  unshareNote: (id: string): Promise<void> =>
     api.post(`/notes/${id}/unshare`).then(() => undefined),
 
-  getVersions: (id: number): Promise<VersionsResponse> =>
-    api.get<VersionsResponse>(`/notes/${id}/versions`).then(res => res.data),
+  getVersions: (id: string): Promise<VersionsResponse> =>
+    api.get(`/notes/${id}/versions`).then(res => res.data),
 
-  restoreVersion: (id: number, versionId: number): Promise<NoteResponse> =>
-    api.post<NoteResponse>(`/notes/${id}/restore/${versionId}`).then(res => res.data),
+  restoreVersion: (id: string, versionId: string): Promise<Note> =>
+    api.post(`/notes/${id}/restore/${versionId}`).then(res => res.data),
 
-  deleteVersion: (id: number, versionId: number): Promise<void> =>
+  deleteVersion: (id: string, versionId: string): Promise<void> =>
     api.delete(`/notes/${id}/versions/${versionId}`).then(() => undefined)
 }
 
-// Folders API
+// Folders API - returns Folder directly
 export const foldersAPI = {
-  getFolders: (): Promise<FoldersResponse> =>
-    api.get<FoldersResponse>('/folders').then(res => res.data),
+  getFolders: (): Promise<{ folders: Folder[]; uncategorizedCount: number }> =>
+    api.get('/folders').then(res => res.data),
 
-  createFolder: (data: CreateFolderRequest): Promise<FolderResponse> =>
-    api.post<FolderResponse>('/folders', data).then(res => res.data),
+  createFolder: (data: CreateFolderRequest): Promise<Folder> =>
+    api.post('/folders', data).then(res => res.data),
 
-  updateFolder: (id: number, data: UpdateFolderRequest): Promise<FolderResponse> =>
-    api.put<FolderResponse>(`/folders/${id}`, data).then(res => res.data),
+  updateFolder: (id: string, data: UpdateFolderRequest): Promise<Folder> =>
+    api.put(`/folders/${id}`, data).then(res => res.data),
 
-  deleteFolder: (id: number): Promise<void> =>
+  deleteFolder: (id: string): Promise<void> =>
     api.delete(`/folders/${id}`).then(() => undefined),
 
   reorderFolders: (data: ReorderFoldersRequest): Promise<void> =>
     api.put('/folders/reorder', data.folderIds).then(() => undefined),
 
-  pinFolder: (id: number): Promise<void> =>
-    api.put(`/folders/${id}/pin`).then(() => undefined)
+  pinFolder: (id: string): Promise<Folder> =>
+    api.put(`/folders/${id}/pin`).then(res => res.data)
 }
 
 // Shared API
 export const sharedAPI = {
-  getSharedNote: (token: string): Promise<{ note: Note & { author: string } }> =>
+  getSharedNote: (token: string): Promise<{ id: number; title: string; content: string; author: string; createdAt: string; updatedAt: string }> =>
     api.get(`/shared/${token}`).then(res => res.data)
 }
 

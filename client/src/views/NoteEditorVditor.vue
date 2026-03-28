@@ -372,27 +372,27 @@ const updateVditor = (content) => {
 
 const loadNote = async () => {
   try {
-    const res = await withRetry(() => notesAPI.getNote(note.id))
+    const noteData = await withRetry(() => notesAPI.getNote(note.id))
     // Ignore if route changed while request was in flight
     if (String(currentNoteId) !== String(note.id)) return
 
     // Store the content in a local variable first
-    const content = res.note.content || ''
+    const content = noteData.content || ''
 
-    note.data = res.note
-    note.title = res.note.title
+    note.data = noteData
+    note.title = noteData.title
     note.content = content
-    note.folderId = res.note.folderId
-    note.version = res.note.version
-    note.isShared = res.note.isShared || false
+    note.folderId = noteData.folderId
+    note.version = noteData.version
+    note.isShared = noteData.isShared || false
 
-    original.title = res.note.title || ''
+    original.title = noteData.title || ''
     original.content = content
 
     note.isNew = note.version === '0'
 
-    if (res.note.folderId) {
-      currentFolder.value = res.note.folderId
+    if (noteData.folderId) {
+      currentFolder.value = noteData.folderId
     }
 
     ui.hasUnsavedChanges = false
@@ -439,7 +439,7 @@ const saveNote = async () => {
   if (!note.id) return
 
   try {
-    const res = await withRetry(() => notesAPI.updateNote(note.id, {
+    const updatedNote = await withRetry(() => notesAPI.updateNote(note.id, {
       title: note.title || '无标题笔记',
       content: note.content,
       folderId: note.folderId
@@ -447,7 +447,7 @@ const saveNote = async () => {
 
     original.title = note.title || '无标题笔记'
     original.content = note.content
-    note.version = res.note?.version ? res.note.version : note.version
+    note.version = updatedNote?.version ? updatedNote.version : note.version
     ui.hasUnsavedChanges = false
     note.isNew = false
 
@@ -465,7 +465,7 @@ const manualSave = async () => {
   if (!note.id) return
 
   try {
-    const res = await withRetry(() => notesAPI.updateNote(note.id, {
+    const updatedNote = await withRetry(() => notesAPI.updateNote(note.id, {
       title: note.title || '无标题笔记',
       content: note.content,
       folderId: note.folderId,
@@ -474,7 +474,7 @@ const manualSave = async () => {
 
     original.title = note.title || '无标题笔记'
     original.content = note.content
-    note.version = res.note?.version ? res.note.version : note.version
+    note.version = updatedNote?.version ? updatedNote.version : note.version
     ui.hasUnsavedChanges = false
     note.isNew = false
 

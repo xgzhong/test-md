@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using server_dotnet.Common.Result;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
 
@@ -7,7 +9,8 @@ namespace server_dotnet.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SharedController : ControllerBase
+[EnableRateLimiting("shared")]
+public class SharedController : BaseController
 {
     private readonly AppDbContext _context;
 
@@ -17,7 +20,7 @@ public class SharedController : ControllerBase
     }
 
     [HttpGet("{token}")]
-    public async Task<ActionResult<SharedNoteResponse>> GetSharedNote(string token)
+    public async Task<IActionResult> GetSharedNote(string token)
     {
         var note = await _context.Notes
             .Where(n => n.ShareToken == token && n.IsShared)
@@ -26,10 +29,10 @@ public class SharedController : ControllerBase
 
         if (note == null)
         {
-            return NotFound(new { error = "笔记不存在或未分享" });
+            return ReturnResult(Result.NotFound("笔记不存在或未分享"));
         }
 
-        return Ok(new SharedNoteResponse(new SharedNoteDto(
+        return ReturnResult(Result.Success(new SharedNoteDto(
             note.Id,
             note.Title,
             note.Content,

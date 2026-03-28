@@ -108,7 +108,7 @@
               <h3>{{ note.title }}</h3>
               <el-icon class="delete-icon" @click.stop="confirmDelete(note)"><Delete /></el-icon>
             </div>
-            <p v-html="note.content ? escapeHtml(note.content) : '暂无内容'"></p>
+            <p v-text="note.content ? escapeHtml(note.content) : '暂无内容'"></p>
             <div class="note-meta">
               <span>{{ formatDate(note.updatedAt) }}</span>
               <el-tag v-if="note.isShared" size="small" type="success" style="margin-left: 10px;">
@@ -332,13 +332,13 @@ const openNote = (noteId) => {
 
 const createNoteInCurrentFolder = async () => {
   try {
-    const res = await notesAPI.createNote({
+    const note = await notesAPI.createNote({
       title: '无标题笔记',
       content: '',
       folderId: route.params.id
     })
-    if (res?.note?.id) {
-      router.push(`/note/${res.note.id}`)
+    if (note?.id) {
+      router.push(`/note/${note.id}`)
     }
   } catch (error) {
     ElMessage.error(error.message)
@@ -555,13 +555,13 @@ const openAddChildFolder = (parentFolder) => {
 
 const createNoteInFolder = async (folder) => {
   try {
-    const res = await notesAPI.createNote({
+    const note = await notesAPI.createNote({
       title: '无标题笔记',
       content: '',
       folderId: folder.id
     })
-    if (res?.note?.id) {
-      router.push(`/note/${res.note.id}`)
+    if (note?.id) {
+      router.push(`/note/${note.id}`)
     }
   } catch (error) {
     ElMessage.error(error.message)
@@ -840,13 +840,21 @@ watch(() => route.params.id, (newId, oldId) => {
 }
 
 .delete-icon {
-  color: #f56c6c;
-  opacity: 0;
-  transition: opacity 0.2s;
+  color: #c0c4cc;
   cursor: pointer;
-  font-size: 18px;
-  padding: 6px;
+  opacity: 0;
+  width: 32px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.delete-icon:hover {
+  color: #f56c6c;
+  background-color: rgba(245, 108, 108, 0.1);
 }
 
 .note-card:hover .delete-icon {

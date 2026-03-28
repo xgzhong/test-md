@@ -3,22 +3,22 @@ import { ref, computed } from 'vue'
 import { notesAPI, foldersAPI } from '../api'
 
 export interface Note {
-  id: number
-  folderId: number | null
+  id: string
+  folderId: string | null
   folderName: string | null
   title: string
   content: string
   isShared: boolean
   shareToken: string | null
-  version: number
+  version: string
   createdAt: string
   updatedAt: string
 }
 
 export interface Folder {
-  id: number
+  id: string
   name: string
-  parentId: number
+  parentId: string
   noteCount: number
   sortOrder: number
   isPinned: boolean
@@ -42,10 +42,10 @@ export const useNotesStore = defineStore('notes', () => {
     )
   })
 
-  const rootFolders = computed(() => folders.value.filter(f => f.parentId === 0))
+  const rootFolders = computed(() => folders.value.filter(f => f.parentId === '0'))
 
   // Actions
-  async function fetchNotes(folderId?: number) {
+  async function fetchNotes(folderId?: string | number) {
     isLoading.value = true
     try {
       const params: Record<string, any> = {}
@@ -64,25 +64,25 @@ export const useNotesStore = defineStore('notes', () => {
     folders.value = res.folders as Folder[]
   }
 
-  async function createNote(title: string, content: string, folderId?: number) {
-    const res = await notesAPI.createNote({ title, content, folderId } as any)
-    notes.value.unshift(res.note as Note)
-    return res.note as Note
+  async function createNote(title: string, content: string, folderId?: string | number) {
+    const note = await notesAPI.createNote({ title, content, folderId })
+    notes.value.unshift(note as Note)
+    return note as Note
   }
 
-  async function updateNote(id: number, data: Partial<Note>) {
-    const res = await notesAPI.updateNote(id, data as any)
+  async function updateNote(id: string, data: Partial<Note>) {
+    const note = await notesAPI.updateNote(id, data as any)
     const index = notes.value.findIndex(n => String(n.id) === String(id))
     if (index !== -1) {
-      notes.value[index] = res.note as Note
+      notes.value[index] = note as Note
     }
     if (String(currentNote.value?.id) === String(id)) {
-      currentNote.value = res.note as Note
+      currentNote.value = note as Note
     }
-    return res.note as Note
+    return note as Note
   }
 
-  async function deleteNote(id: number) {
+  async function deleteNote(id: string) {
     await notesAPI.deleteNote(id)
     notes.value = notes.value.filter(n => String(n.id) !== String(id))
     if (String(currentNote.value?.id) === String(id)) {
@@ -90,10 +90,10 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
-  async function getNote(id: number) {
-    const res = await notesAPI.getNote(id)
-    currentNote.value = res.note as Note
-    return res.note as Note
+  async function getNote(id: string) {
+    const note = await notesAPI.getNote(id)
+    currentNote.value = note as Note
+    return note as Note
   }
 
   function setSearchQuery(query: string) {

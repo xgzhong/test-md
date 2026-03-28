@@ -85,6 +85,7 @@ YitIdHelper.SetIdGenerator(idGeneratorOptions);
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(new LongToStringConverter());
         options.JsonSerializerOptions.Converters.Add(new NullableLongToStringConverter());
         options.JsonSerializerOptions.Converters.Add(new DateTimeConverter());
@@ -141,6 +142,13 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = AppConstants.AuthRateLimitPermitCount,
                 Window = TimeSpan.FromMinutes(AppConstants.AuthRateLimitWindowMinutes)
+            }));
+    options.AddPolicy("shared", context =>
+        RateLimitPartition.GetFixedWindowLimiter("shared", _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1)
             }));
 });
 

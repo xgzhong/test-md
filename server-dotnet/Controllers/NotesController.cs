@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using server_dotnet.Common.Result;
 using server_dotnet.Constants;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
@@ -23,10 +24,10 @@ public class NotesController : BaseController
     }
 
     [HttpGet]
-    public async Task<ActionResult<NotesResponse>> GetNotes([FromQuery] string? folderId, [FromQuery] string? search)
+    public async Task<IActionResult> GetNotes([FromQuery] string? folderId, [FromQuery] string? search)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         // 处理 folderId 字符串参数
         long? parsedFolderId = null;
@@ -81,14 +82,14 @@ public class NotesController : BaseController
             ))
             .ToListAsync();
 
-        return Ok(new NotesResponse(notes, totalCount));
+        return ReturnResult(Result.Success(new NotesResponse(notes, totalCount), "获取成功"));
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<NoteResponse>> GetNote(long id)
+    public async Task<IActionResult> GetNote(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes
             .Where(n => n.Id == id && n.UserId == userId)
@@ -97,10 +98,10 @@ public class NotesController : BaseController
 
         if (note == null)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
-        return Ok(new NoteResponse("获取成功", new NoteDto(
+        return ReturnResult(Result.Success(new NoteDto(
             note.Id,
             note.FolderId,
             note.Folder?.Name,
@@ -111,14 +112,14 @@ public class NotesController : BaseController
             note.Version,
             note.CreatedAt,
             note.UpdatedAt
-        )));
+        ), "获取成功"));
     }
 
     [HttpPost]
-    public async Task<ActionResult<NoteResponse>> CreateNote([FromBody] CreateNoteRequest request)
+    public async Task<IActionResult> CreateNote([FromBody] CreateNoteRequest request)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = new server_dotnet.Models.Note
         {
@@ -151,7 +152,7 @@ public class NotesController : BaseController
         _context.NoteVersions.Add(noteVersion);
         await _context.SaveChangesAsync();
 
-        return StatusCode(201, new NoteResponse("笔记创建成功", new NoteDto(
+        return ReturnResult(Result.Success(new NoteDto(
             note.Id,
             note.FolderId,
             null,
@@ -162,19 +163,19 @@ public class NotesController : BaseController
             note.Version,
             note.CreatedAt,
             note.UpdatedAt
-        )));
+        ), "笔记创建成功"));
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<NoteResponse>> UpdateNote(long id, [FromBody] UpdateNoteRequest request)
+    public async Task<IActionResult> UpdateNote(long id, [FromBody] UpdateNoteRequest request)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         // 只有手动点击保存版本按钮时才保存版本历史
@@ -221,7 +222,7 @@ public class NotesController : BaseController
 
         var folder = note.FolderId.HasValue ? await _context.Folders.FindAsync(note.FolderId) : null;
 
-        return Ok(new NoteResponse("笔记更新成功", new NoteDto(
+        return ReturnResult(Result.Success(new NoteDto(
             note.Id,
             note.FolderId,
             folder?.Name,
@@ -232,76 +233,76 @@ public class NotesController : BaseController
             note.Version,
             note.CreatedAt,
             note.UpdatedAt
-        )));
+        ), "笔记更新成功"));
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteNote(long id)
+    public async Task<IActionResult> DeleteNote(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         // 逻辑删除
         note.IsDeleted = true;
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "笔记删除成功" });
+        return ReturnResult(Result.Success("笔记删除成功"));
     }
 
     [HttpPost("{id}/share")]
-    public async Task<ActionResult<ShareResponse>> ShareNote(long id)
+    public async Task<IActionResult> ShareNote(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         note.IsShared = true;
         note.ShareToken = GenerateSecureToken();
         await _context.SaveChangesAsync();
 
-        return Ok(new ShareResponse("分享成功", $"/shared/{note.ShareToken}"));
+        return ReturnResult(Result.Success(new ShareResponse("分享成功", $"/shared/{note.ShareToken}")));
     }
 
     [HttpPost("{id}/unshare")]
-    public async Task<ActionResult> UnshareNote(long id)
+    public async Task<IActionResult> UnshareNote(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         note.IsShared = false;
         note.ShareToken = null;
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "取消分享成功" });
+        return ReturnResult(Result.Success("取消分享成功"));
     }
 
     [HttpGet("{id}/versions")]
-    public async Task<ActionResult<VersionsResponse>> GetVersions(long id)
+    public async Task<IActionResult> GetVersions(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         var versions = await _context.NoteVersions
@@ -311,25 +312,25 @@ public class NotesController : BaseController
             .Select(v => new NoteVersionDto(v.Id, v.Title, v.Content, v.CreatedAt))
             .ToListAsync();
 
-        return Ok(new VersionsResponse(versions));
+        return ReturnResult(Result.Success(new VersionsResponse(versions)));
     }
 
     [HttpPost("{id}/restore/{versionId}")]
-    public async Task<ActionResult<NoteResponse>> RestoreVersion(long id, long versionId)
+    public async Task<IActionResult> RestoreVersion(long id, long versionId)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         var version = await _context.NoteVersions.FindAsync(versionId);
         if (version == null || version.NoteId != id)
         {
-            return NotFound(new { error = "版本不存在" });
+            return ReturnResult(Result.NotFound("版本不存在"));
         }
 
         // Save current version
@@ -358,7 +359,7 @@ public class NotesController : BaseController
 
         var folder = note.FolderId.HasValue ? await _context.Folders.FindAsync(note.FolderId) : null;
 
-        return Ok(new NoteResponse("恢复成功", new NoteDto(
+        return ReturnResult(Result.Success(new NoteDto(
             note.Id,
             note.FolderId,
             folder?.Name,
@@ -369,32 +370,32 @@ public class NotesController : BaseController
             note.Version,
             note.CreatedAt,
             note.UpdatedAt
-        )));
+        ), "恢复成功"));
     }
 
     [HttpDelete("{id}/versions/{versionId}")]
-    public async Task<ActionResult> DeleteVersion(long id, long versionId)
+    public async Task<IActionResult> DeleteVersion(long id, long versionId)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var note = await _context.Notes.FindAsync(id);
         if (note == null || note.UserId != userId)
         {
-            return NotFound(new { error = "笔记不存在" });
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         var version = await _context.NoteVersions.FindAsync(versionId);
         if (version == null || version.NoteId != id)
         {
-            return NotFound(new { error = "版本不存在" });
+            return ReturnResult(Result.NotFound("版本不存在"));
         }
 
         // 逻辑删除
         version.IsDeleted = true;
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "版本删除成功" });
+        return ReturnResult(Result.Success("版本删除成功"));
     }
 
     /// <summary>

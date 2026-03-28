@@ -1,6 +1,7 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { notesAPI, foldersAPI, type Folder, type Note } from '../api'
+import { getParentIdStr, isRootId, isSameParentId, isDescendant, flattenFolders } from './useCommon'
 
 /**
  * Sidebar Composable - 封装侧边栏所有逻辑
@@ -33,46 +34,6 @@ export function useSidebar() {
 
   // ============== Drag-Drop Helpers ==============
   const DRAG_SIBLING_THRESHOLD = 0.35
-
-  const getParentIdStr = (id: number | string | null | undefined): string => {
-    if (id === null || id === undefined) return '0'
-    return String(id) === '0' ? '0' : String(id)
-  }
-
-  const isRootId = (id: any): boolean => {
-    if (id === null || id === undefined) return true
-    const strId = String(id)
-    return strId === '0' || strId === '' || strId === 'null' || strId === 'undefined'
-  }
-
-  const isSameParentId = (id1: any, id2: any): boolean => {
-    return getParentIdStr(id1) === getParentIdStr(id2)
-  }
-
-  const isDescendant = (parent: Folder, childId: string | number, flatFolders: Folder[]): boolean => {
-    const parentIdStr = String(parent.id)
-    const children = flatFolders.filter(f => String(f.parentId) === parentIdStr)
-    for (const child of children) {
-      if (String(child.id) === String(childId)) return true
-      if (isDescendant(child, childId, flatFolders)) return true
-    }
-    return false
-  }
-
-  const flattenFolders = (folderList: Folder[]): Folder[] => {
-    const result: Folder[] = []
-    const flatten = (items: Folder[], parentId: string = '0'): void => {
-      for (const item of items) {
-        const pid = item.parentId ? String(item.parentId) : '0'
-        result.push({ ...item, parentId: pid as any })
-        if (item.children && item.children.length > 0) {
-          flatten(item.children, String(item.id))
-        }
-      }
-    }
-    flatten(folderList)
-    return result
-  }
 
   // ============== Actions ==============
 
@@ -183,7 +144,8 @@ export function useSidebar() {
           await foldersAPI.reorderFolders({ folderIds })
           await loadFolders()
           ElMessage.success('排序已保存')
-        } catch {
+        } catch (e) {
+          // 保存排序失败
           ElMessage.error('保存排序失败')
           await loadFolders()
         }
@@ -232,7 +194,7 @@ export function useSidebar() {
   }
 
   // 更新分类
-  const updateFolder = async (id: number, name: string, parentId: number | string | null = null) => {
+  const updateFolder = async (id: string, name: string, parentId: number | string | null = null) => {
     try {
       const parentIdValue = (parentId === null || parentId === undefined) ? '0' : parentId
       await foldersAPI.updateFolder(id, { name, parentId: parentIdValue })
@@ -244,7 +206,7 @@ export function useSidebar() {
   }
 
   // 删除分类
-  const deleteFolder = async (id: number) => {
+  const deleteFolder = async (id: string) => {
     try {
       await foldersAPI.deleteFolder(id)
       ElMessage.success('分类删除成功')
@@ -255,7 +217,7 @@ export function useSidebar() {
   }
 
   // 切换置顶
-  const togglePinFolder = async (id: number) => {
+  const togglePinFolder = async (id: string) => {
     try {
       await foldersAPI.pinFolder(id)
       await loadFolders()
@@ -265,12 +227,12 @@ export function useSidebar() {
   }
 
   // 创建笔记
-  const createNote = async (title: string = '无标题笔记', content: string = '', folderId?: number | null) => {
+  const createNote = async (title: string = '无标题笔记', content: string = '', folderId?: string | number | null) => {
     try {
-      const res = await notesAPI.createNote({ title, content, folderId })
+      const note = await notesAPI.createNote({ title, content, folderId })
       ElMessage.success('笔记创建成功')
       await loadNotes()
-      return res.note
+      return note
     } catch (error: any) {
       ElMessage.error(error?.message || '创建笔记失败')
       return null
@@ -283,7 +245,7 @@ export function useSidebar() {
   }
 
   // 删除笔记
-  const deleteNote = async (id: number) => {
+  const deleteNote = async (id: string) => {
     try {
       await notesAPI.deleteNote(id)
       ElMessage.success('笔记删除成功')
@@ -315,7 +277,7 @@ export function useSidebar() {
   // 获取分类下的笔记
   const getNotesByFolderId = (folderId: number | string | null): Note[] => {
     if (folderId === null || folderId === undefined) return []
-    return notes.value.filter(n => n.folderId === Number(folderId))
+    return notes.value.filter(n => String(n.folderId) === String(folderId))
   }
 
   const returnValue: SidebarReturn = {
@@ -379,12 +341,12 @@ export interface SidebarReturn {
   onDragLeave: () => void
   onDrop: (event: DragEvent, targetFolder: Folder | null) => Promise<void>
   createFolder: (name: string, parentId?: number | string | null) => Promise<void>
-  updateFolder: (id: number, name: string, parentId?: number | string | null) => Promise<void>
-  deleteFolder: (id: number) => Promise<void>
-  togglePinFolder: (id: number) => Promise<void>
+  updateFolder: (id: string, name: string, parentId?: number | string | null) => Promise<void>
+  deleteFolder: (id: string) => Promise<void>
+  togglePinFolder: (id: string) => Promise<void>
   createNote: (title?: string, content?: string, folderId?: number | null) => Promise<Note | null>
   createNoteInFolder: (folder: Folder, title?: string, content?: string) => Promise<Note | null>
-  deleteNote: (id: number) => Promise<void>
+  deleteNote: (id: string) => Promise<void>
   getFolderName: (folderId: number | string | null | undefined) => string
   getNotesByFolderId: (folderId: number | string | null) => Note[]
 }

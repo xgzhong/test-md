@@ -75,7 +75,7 @@
         v-for="child in folder.children"
         :key="child.id"
         :folder="child"
-        :notes="notes"
+        :notesByFolderId="notesByFolderId"
         :currentFolder="currentFolder"
         :level="level + 1"
         :expandedKeys="expandedKeys"
@@ -124,9 +124,9 @@ const props = defineProps({
     type: Object as () => Folder,
     required: true
   },
-  notes: {
-    type: Array as () => Note[],
-    default: () => []
+  notesByFolderId: {
+    type: Object as () => Map<string | number, Note[]>,
+    default: () => new Map()
   },
   currentFolder: {
     type: [Number, String, null],
@@ -177,9 +177,11 @@ const emit = defineEmits([
   'drop'
 ])
 
-// 筛选属于当前分类的笔记
+// 从预计算的 map 中获取当前分类的笔记，O(1) 查找
 const folderNotes = computed(() => {
-  return props.notes.filter(note => String(note.folderId) === String(props.folder.id))
+  if (!props.notesByFolderId) return []
+  const fid = String(props.folder.id)
+  return props.notesByFolderId.get(fid) || []
 })
 
 // 当前选中的笔记ID

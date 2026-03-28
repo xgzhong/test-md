@@ -45,7 +45,7 @@
         <template v-for="folder in sidebar.rootFolders.value" :key="folder.id">
           <FolderTreeItem
             :folder="folder"
-            :notes="sidebar.notes.value"
+            :notesByFolderId="notesByFolderId"
             :currentFolder="currentFolder"
             :level="0"
             :expandedKeys="sidebar.expandedKeys.value"
@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import FolderTreeItem from './FolderTreeItem.vue'
 import { useSidebar } from '../composables/useSidebar'
@@ -142,6 +142,17 @@ watch(() => props.notes, (val) => {
     sidebar.notes.value = val as any[]
   }
 }, { immediate: true })
+
+// Pre-compute notes grouped by folderId for O(1) lookup
+const notesByFolderId = computed(() => {
+  const map = new Map<string | number, typeof props.notes>()
+  for (const note of props.notes) {
+    const fid = note.folderId === null || note.folderId === undefined ? 'uncategorized' : String(note.folderId)
+    if (!map.has(fid)) map.set(fid, [])
+    map.get(fid)!.push(note)
+  }
+  return map
+})
 
 watch(() => props.uncategorizedCount, (val) => {
   if (val !== undefined) {

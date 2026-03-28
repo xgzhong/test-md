@@ -67,6 +67,10 @@ public class AppDbContext : DbContext
                 .WithMany(n => n.Versions)
                 .HasForeignKey(nv => nv.NoteId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // 性能优化：添加索引
+            entity.HasIndex(nv => nv.NoteId);
+            entity.HasIndex(nv => new { nv.NoteId, nv.Version });
         });
     }
 }

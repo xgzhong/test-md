@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using server_dotnet.Common.Result;
 using server_dotnet.Data;
 using server_dotnet.DTOs;
 using Yitter.IdGenerator;
@@ -21,10 +22,10 @@ public class FoldersController : BaseController
     }
 
     [HttpGet]
-    public async Task<ActionResult<FoldersResponse>> GetFolders()
+    public async Task<IActionResult> GetFolders()
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var folders = await _context.Folders
             .Where(f => f.UserId == userId)
@@ -73,18 +74,18 @@ public class FoldersController : BaseController
         var uncategorizedCount = await _context.Notes
             .CountAsync(n => n.FolderId == null && n.UserId == userId && !n.IsDeleted);
 
-        return Ok(new FoldersResponse(roots, uncategorizedCount));
+        return ReturnResult(Result.Success(new FoldersResponse(roots, uncategorizedCount), "获取成功"));
     }
 
     [HttpPost]
-    public async Task<ActionResult<FolderResponse>> CreateFolder([FromBody] CreateFolderRequest request)
+    public async Task<IActionResult> CreateFolder([FromBody] CreateFolderRequest request)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         if (string.IsNullOrEmpty(request.Name))
         {
-            return BadRequest(new { error = "请输入分类名称" });
+            return ReturnResult(Result.Invalid("请输入分类名称"));
         }
 
         var folder = new server_dotnet.Models.Folder
@@ -102,19 +103,19 @@ public class FoldersController : BaseController
         _context.Folders.Add(folder);
         await _context.SaveChangesAsync();
 
-        return StatusCode(201, new FolderResponse("分类创建成功", new FolderDto(folder.Id, folder.Name, 0, folder.SortOrder, folder.IsPinned, folder.ParentId)));
+        return ReturnResult(Result.Success(new FolderDto(folder.Id, folder.Name, 0, folder.SortOrder, folder.IsPinned, folder.ParentId), "分类创建成功"));
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<FolderResponse>> UpdateFolder(long id, [FromBody] UpdateFolderRequest request)
+    public async Task<IActionResult> UpdateFolder(long id, [FromBody] UpdateFolderRequest request)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var folder = await _context.Folders.FindAsync(id);
         if (folder == null || folder.UserId != userId)
         {
-            return NotFound(new { error = "分类不存在" });
+            return ReturnResult(Result.NotFound("分类不存在"));
         }
 
         if (!string.IsNullOrEmpty(request.Name))
@@ -138,7 +139,7 @@ public class FoldersController : BaseController
                 // 禁止将分类设为自己的子分类
                 if (newParentId == folder.Id)
                 {
-                    return BadRequest(new { error = "不能将分类设为自己" });
+                    return ReturnResult(Result.Invalid("不能将分类设为自己"));
                 }
 
                 // 检查是否形成循环引用
@@ -149,7 +150,7 @@ public class FoldersController : BaseController
                 {
                     if (visited.Contains(currentId))
                     {
-                        return BadRequest(new { error = "不能将分类设为子分类的父分类" });
+                        return ReturnResult(Result.Invalid("不能将分类设为子分类的父分类"));
                     }
                     visited.Add(currentId);
                     var parent = allFolders.FirstOrDefault(f => f.Id == currentId);
@@ -168,19 +169,19 @@ public class FoldersController : BaseController
 
         var noteCount = await _context.Notes.CountAsync(n => n.FolderId == folder.Id && n.UserId == userId && !n.IsDeleted);
 
-        return Ok(new FolderResponse("分类更新成功", new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned, folder.ParentId)));
+        return ReturnResult(Result.Success(new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned, folder.ParentId), "分类更新成功"));
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteFolder(long id)
+    public async Task<IActionResult> DeleteFolder(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var folder = await _context.Folders.FindAsync(id);
         if (folder == null || folder.UserId != userId)
         {
-            return NotFound(new { error = "分类不存在" });
+            return ReturnResult(Result.NotFound("分类不存在"));
         }
 
         // 优化：一次性获取所有文件夹，避免递归 N+1 查询
@@ -214,14 +215,14 @@ public class FoldersController : BaseController
         _context.Folders.RemoveRange(foldersToDelete);
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "分类删除成功" });
+        return ReturnResult(Result.Success("分类删除成功"));
     }
 
     [HttpPut("reorder")]
-    public async Task<ActionResult> ReorderFolders([FromBody] List<long> folderIds)
+    public async Task<IActionResult> ReorderFolders([FromBody] List<long> folderIds)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         for (int i = 0; i < folderIds.Count; i++)
         {
@@ -234,19 +235,19 @@ public class FoldersController : BaseController
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "排序更新成功" });
+        return ReturnResult(Result.Success("排序更新成功"));
     }
 
     [HttpPut("{id}/pin")]
-    public async Task<ActionResult<FolderResponse>> TogglePin(long id)
+    public async Task<IActionResult> TogglePin(long id)
     {
         var userId = GetUserId();
-        if (userId == null) return Unauthorized();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
 
         var folder = await _context.Folders.FindAsync(id);
         if (folder == null || folder.UserId != userId)
         {
-            return NotFound(new { error = "分类不存在" });
+            return ReturnResult(Result.NotFound("分类不存在"));
         }
 
         folder.IsPinned = !folder.IsPinned;
@@ -255,6 +256,6 @@ public class FoldersController : BaseController
         var noteCount = await _context.Notes.CountAsync(n => n.FolderId == folder.Id && n.UserId == userId && !n.IsDeleted);
 
         var message = folder.IsPinned ? "置顶成功" : "取消置顶成功";
-        return Ok(new FolderResponse(message, new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned, folder.ParentId)));
+        return ReturnResult(Result.Success(new FolderDto(folder.Id, folder.Name, noteCount, folder.SortOrder, folder.IsPinned, folder.ParentId), message));
     }
 }

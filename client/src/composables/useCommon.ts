@@ -225,7 +225,7 @@ export function useFolderDrag(options: UseFolderDragOptions): DragState {
 // ============== Note Operations Composable ==============
 
 interface NoteItem {
-  id: number
+  id: string
   title: string
   [key: string]: any
 }
@@ -250,15 +250,15 @@ export function useNotes() {
 
   const createNote = async (data: { title?: string; content?: string; folderId?: number }): Promise<NoteItem | null> => {
     try {
-      const res = await notesAPI.createNote(data)
-      return res.note
+      const note = await notesAPI.createNote(data)
+      return note
     } catch (error: any) {
       ElMessage.error(error?.message || '创建笔记失败')
       return null
     }
   }
 
-  const deleteNote = async (noteId: number): Promise<void> => {
+  const deleteNote = async (noteId: string): Promise<void> => {
     try {
       await notesAPI.deleteNote(noteId)
     } catch (error: any) {
@@ -304,7 +304,7 @@ export function useFolders() {
     }
   }
 
-  const updateFolder = async (id: number, data: { name?: string; parentId?: string | number | null }): Promise<void> => {
+  const updateFolder = async (id: string, data: { name?: string; parentId?: string | number | null }): Promise<void> => {
     try {
       await foldersAPI.updateFolder(id, data)
     } catch (error: any) {
@@ -312,7 +312,7 @@ export function useFolders() {
     }
   }
 
-  const deleteFolder = async (folderId: number): Promise<void> => {
+  const deleteFolder = async (folderId: string): Promise<void> => {
     try {
       await foldersAPI.deleteFolder(folderId)
     } catch (error: any) {
