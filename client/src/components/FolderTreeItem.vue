@@ -6,7 +6,7 @@
     <div
       class="folder-item"
       :class="[
-        { active: currentFolder === folder.id, pinned: folder.isPinned, 'drag-over': isDragOver },
+        { active: String(currentFolder) === String(folder.id), pinned: folder.isPinned, 'drag-over': isDragOver },
         dragOverClass
       ]"
       :style="{ paddingLeft: (level * 20 + 8) + 'px' }"
@@ -104,7 +104,7 @@
         v-for="note in folderNotes"
         :key="note.id"
         class="note-item"
-        :class="{ active: currentNoteId === note.id }"
+        :class="{ active: String(currentNoteId) === String(note.id) }"
         :style="{ paddingLeft: (level * 20 + 36) + 'px' }"
         @click.stop="$emit('openNote', note.id)"
       >
@@ -115,16 +115,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { Folder, Note } from '../api'
 
 const props = defineProps({
   folder: {
-    type: Object,
+    type: Object as () => Folder,
     required: true
   },
   notes: {
-    type: Array,
+    type: Array as () => Note[],
     default: () => []
   },
   currentFolder: {
@@ -144,11 +145,11 @@ const props = defineProps({
     default: true
   },
   dragOverFolder: {
-    type: Object,
+    type: Object as () => Folder | null,
     default: null
   },
   draggedFolder: {
-    type: Object,
+    type: Object as () => Folder | null,
     default: null
   },
   hoverSide: {
@@ -178,7 +179,7 @@ const emit = defineEmits([
 
 // 筛选属于当前分类的笔记
 const folderNotes = computed(() => {
-  return props.notes.filter(note => note.folderId === props.folder.id)
+  return props.notes.filter(note => String(note.folderId) === String(props.folder.id))
 })
 
 // 当前选中的笔记ID
@@ -200,7 +201,7 @@ const handleFolderClick = () => {
 
 const isDragOver = computed(() => {
   if (!props.dragOverFolder) return false
-  return props.dragOverFolder.id === props.folder.id
+  return String(props.dragOverFolder.id) === String(props.folder.id)
 })
 
 const dragOverClass = computed(() => {

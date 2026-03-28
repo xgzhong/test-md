@@ -47,9 +47,10 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { authAPI } from '../api'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
 
@@ -74,9 +75,7 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     loading.value = true
 
-    const res = await authAPI.login(form)
-    localStorage.setItem('user', JSON.stringify(res.user))
-    localStorage.setItem('isLoggedIn', 'true')
+    await authStore.login(form.email, form.password)
 
     ElMessage.success('登录成功')
     router.push('/home')

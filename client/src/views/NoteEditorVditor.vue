@@ -17,9 +17,10 @@
       @titleClick="handleGoHome"
     />
 
-    <!-- 编辑器区域 -->
-    <div class="main-content editor-main-content">
-      <div class="content-header">
+    <!-- 主内容区 -->
+    <div class="main-wrapper">
+      <!-- 头部栏 -->
+      <header class="header-bar">
         <div class="header-left">
           <el-icon class="home-icon" @click="handleGoHome"><Back /></el-icon>
           <el-breadcrumb separator="/" v-if="breadcrumbPath.length > 0">
@@ -73,16 +74,20 @@
             删除
           </el-button>
         </div>
-      </div>
+      </header>
 
-      <div class="editor-container" :class="{ 'wide-mode': isWideMode }">
-        <div id="vditor" class="vditor-editor"></div>
-      </div>
+      <!-- 内容区 -->
+      <main class="content-area">
+        <div class="content-area" :class="{ 'wide-mode': isWideMode }">
+          <div id="vditor" class="vditor-editor"></div>
+        </div>
+      </main>
 
-      <div class="editor-footer">
+      <!-- 底部区 -->
+      <footer class="footer-bar">
         <span class="word-count">字数：{{ wordCount }}</span>
         <span class="char-count">字符：{{ charCount }}</span>
-      </div>
+      </footer>
     </div>
 
     <!-- 版本历史面板 -->
@@ -158,6 +163,7 @@ import DOMPurify from 'dompurify'
 import { notesAPI, foldersAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
 import Vditor from 'vditor'
+import packageJson from '../../package.json'
 import 'vditor/dist/index.css'
 
 const router = useRouter()
@@ -366,9 +372,9 @@ const updateVditor = (content) => {
 
 const loadNote = async () => {
   try {
-    const res = await withRetry(() => notesAPI.getById(note.id))
+    const res = await withRetry(() => notesAPI.getNote(note.id))
     // Ignore if route changed while request was in flight
-    if (currentNoteId !== note.id) return
+    if (String(currentNoteId) !== String(note.id)) return
 
     // Store the content in a local variable first
     const content = res.note.content || ''
@@ -400,7 +406,7 @@ const loadNote = async () => {
       isNoteLoaded = true
     }, 300)
   } catch (error) {
-    if (currentNoteId === note.id) {
+    if (String(currentNoteId) === String(note.id)) {
       ElMessage.error(error.message)
       router.push('/home')
     }
@@ -409,7 +415,7 @@ const loadNote = async () => {
 
 const loadFolders = async () => {
   try {
-    const res = await withRetry(() => foldersAPI.getAll())
+    const res = await withRetry(() => foldersAPI.getFolders())
     folders.value = res.folders
   } catch (error) {
     ElMessage.error(error.message)
@@ -420,10 +426,10 @@ const loadVersions = async () => {
   try {
     const res = await withRetry(() => notesAPI.getVersions(note.id))
     // Ignore if route changed while request was in flight
-    if (currentNoteId !== note.id) return
+    if (String(currentNoteId) !== String(note.id)) return
     noteVersions.value = res.versions
   } catch (error) {
-    if (currentNoteId === note.id) {
+    if (String(currentNoteId) === String(note.id)) {
       ElMessage.error(error.message)
     }
   }
@@ -437,7 +443,7 @@ const saveNote = async () => {
   }
 
   try {
-    const res = await withRetry(() => notesAPI.update(note.id, {
+    const res = await withRetry(() => notesAPI.updateNote(note.id, {
       title: note.title || '无标题笔记',
       content: note.content,
       folderId: note.folderId
@@ -463,7 +469,7 @@ const manualSave = async () => {
   if (!note.id) return
 
   try {
-    const res = await withRetry(() => notesAPI.update(note.id, {
+    const res = await withRetry(() => notesAPI.updateNote(note.id, {
       title: note.title || '无标题笔记',
       content: note.content,
       folderId: note.folderId,
@@ -517,7 +523,7 @@ const handleFolderChange = () => {
 
 const handleShare = async () => {
   try {
-    const res = await withRetry(() => notesAPI.share(note.id))
+    const res = await withRetry(() => notesAPI.shareNote(note.id))
     ui.shareUrl = window.location.origin + res.shareUrl
     ui.showShareDialog = true
     loadNote()
@@ -533,7 +539,7 @@ const copyShareUrl = () => {
 
 const handleUnshare = async () => {
   try {
-    await withRetry(() => notesAPI.unshare(note.id))
+    await withRetry(() => notesAPI.unshareNote(note.id))
     ElMessage.success('取消分享成功')
     ui.showShareDialog = false
     loadNote()
@@ -549,7 +555,7 @@ const deleteNote = () => {
     type: 'warning'
   }).then(async () => {
     try {
-      await withRetry(() => notesAPI.delete(note.id))
+      await withRetry(() => notesAPI.deleteNote(note.id))
       ElMessage.success('删除成功')
       router.push('/home')
     } catch (error) {
@@ -565,7 +571,7 @@ const viewVersion = (v) => {
 
 const restoreVersion = async () => {
   try {
-    await withRetry(() => notesAPI.restore(note.id, ui.selectedVersion.id))
+    await withRetry(() => notesAPI.restoreVersion(note.id, ui.selectedVersion.id))
     ElMessage.success('恢复成功')
     ui.showVersionPreview = false
     loadNote()
@@ -599,7 +605,7 @@ const confirmBeforeLeave = async () => {
     const hasChanges = note.title !== original.title || note.content !== original.content
     if (!hasChanges) {
       try {
-        await withRetry(() => notesAPI.delete(note.id))
+        await withRetry(() => notesAPI.deleteNote(note.id))
       } catch (error) {
         // 忽略删除错误
       }
@@ -622,7 +628,7 @@ const confirmBeforeLeave = async () => {
         if (action === 'cancel') {
           if (isNoteLoaded && note.version === 0) {
             try {
-              await withRetry(() => notesAPI.delete(note.id))
+              await withRetry(() => notesAPI.deleteNote(note.id))
             } catch (error) {
               // 忽略删除错误
             }
@@ -643,7 +649,7 @@ const navigateToHome = async (shouldSave = false, shouldDelete = false) => {
     await saveNote()
   } else if (shouldDelete && note.version === 0) {
     try {
-      await withRetry(() => notesAPI.delete(note.id))
+      await withRetry(() => notesAPI.deleteNote(note.id))
     } catch (error) {
       // 忽略删除错误
     }
@@ -818,18 +824,46 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.editor-main-content {
-  background: white;
+.main-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.header-clickable {
-  cursor: pointer;
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #f5f7fa;
+}
+
+.header-bar {
+  height: 60px;
+  padding: 0 20px;
+  background: white;
+  border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-clickable {
+  cursor: pointer;
 }
 
 .saved-tip {
@@ -882,15 +916,16 @@ onBeforeUnmount(() => {
   width: 150px;
 }
 
-.editor-container {
+.content-area {
   flex: 1;
   display: flex;
   flex-direction: column;
   padding: 10px;
   overflow: auto;
+  background: #f5f7fa;
 }
 
-.editor-container.wide-mode {
+.content-area.wide-mode {
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
@@ -901,15 +936,20 @@ onBeforeUnmount(() => {
   border: 1px solid #e4e7ed;
   border-radius: 4px;
   overflow: hidden;
+  background: white;
 }
 
-.editor-footer {
-  padding: 8px 15px;
+.footer-bar {
+  height: 40px;
+  padding: 0 20px;
+  background: white;
   border-top: 1px solid #e4e7ed;
   display: flex;
+  align-items: center;
   gap: 20px;
   font-size: 12px;
   color: #666;
+  flex-shrink: 0;
 }
 
 .word-count,
@@ -952,8 +992,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.vditor-toolbar--pin) {
-  padding-left: 50px !important;
-  padding-right: 50px !important;
+  padding-left: 150px !important;
+  padding-right: 150px !important;
 }
 
 :deep(.vditor-reset) {
@@ -961,9 +1001,9 @@ onBeforeUnmount(() => {
   padding-right: 50px !important;
 }
 
-.editor-container:not(.wide-mode) :deep(.vditor-toolbar--pin),
-.editor-container:not(.wide-mode) :deep(.vditor-reset) {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
+.content-area:not(.wide-mode) :deep(.vditor-toolbar--pin),
+.content-area:not(.wide-mode) :deep(.vditor-reset) {
+  padding-left: 50 !important;
+  padding-right: 50 !important;
 }
 </style>

@@ -32,8 +32,9 @@
     />
 
     <!-- 主内容区 -->
-    <div class="main-content">
-      <div class="content-header">
+    <div class="main-wrapper">
+      <!-- 头部栏 -->
+      <header class="header-bar">
         <div class="header-left">
           <el-icon class="home-icon" @click="goHome"><Back /></el-icon>
           <el-breadcrumb separator="/">
@@ -46,9 +47,10 @@
             <el-breadcrumb-item>{{ currentFolderData?.name }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
-      </div>
+      </header>
 
-      <div class="content-body">
+      <!-- 内容区 -->
+      <main class="content-area">
         <!-- 操作卡片区域 -->
         <div class="action-cards">
           <div class="action-card" @click="createNoteInCurrentFolder">
@@ -88,9 +90,8 @@
 
         <!-- 笔记卡片列表 -->
         <div v-if="notes.length === 0 && childFolders.length === 0" class="empty-state">
-          <div class="icon">📁</div>
+          <div class="icon">📄</div>
           <p>该分类下暂无笔记</p>
-          <el-button type="primary" @click="createNoteInCurrentFolder">创建笔记</el-button>
         </div>
 
         <div v-if="notes.length > 0" class="section-title" style="margin-top: 20px;">
@@ -116,7 +117,16 @@
             </div>
           </div>
         </div>
-      </div>
+      </main>
+
+      <!-- 底部区 -->
+      <footer class="footer-bar">
+        <p>
+          <span class="footer-link" @click="goHome">{{ packageJson.name }}</span>
+          <span style="margin: 0 10px;">|</span>
+          <a href="https://github.com/xgzhong/test-md" target="_blank" class="github-link">GitHub</a>
+        </p>
+      </footer>
     </div>
 
     <!-- 新建子分类对话框 -->
@@ -154,7 +164,7 @@
               :key="folder.id"
               :label="'└ ' + folder.name"
               :value="folder.id"
-              :disabled="folder.id === editFolderForm.id"
+              :disabled="String(folder.id) === String(editFolderForm.id)"
             />
           </el-select>
           <div style="margin-top: 5px; font-size: 12px; color: #909399;">
@@ -177,7 +187,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Delete, Folder } from '@element-plus/icons-vue'
 import { notesAPI, foldersAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
-import { flattenFolders, getParentIdStr, isSameParentId, isDescendant, formatDate, escapeHtml } from '../utils/useCommon'
+import { flattenFolders, getParentIdStr, isSameParentId, isDescendant, formatDate, escapeHtml } from '../composables/useCommon'
+import packageJson from '../../package.json'
 
 const router = useRouter()
 const route = useRoute()
@@ -235,7 +246,7 @@ const childFolders = computed(() => {
 
 const loadFolders = async () => {
   try {
-    const res = await foldersAPI.getAll()
+    const res = await foldersAPI.getFolders()
     folders.value = res.folders
     uncategorizedCount.value = res.uncategorizedCount
     loadAllNotesForSidebar()
@@ -246,7 +257,7 @@ const loadFolders = async () => {
 
 const loadAllNotesForSidebar = async () => {
   try {
-    const res = await notesAPI.getAll({})
+    const res = await notesAPI.getNotes({})
     sidebarNotes.value = res.notes || []
   } catch (error) {
     console.error('加载笔记失败:', error)
@@ -281,7 +292,7 @@ const loadFolderDetail = async () => {
     }
 
     // 加载该分类下的笔记
-    const res = await notesAPI.getAll({ folderId: folderId })
+    const res = await notesAPI.getNotes({ folderId: folderId })
     notes.value = res.notes || []
     totalNotes.value = res.totalCount || 0
   } catch (error) {
@@ -321,7 +332,7 @@ const openNote = (noteId) => {
 
 const createNoteInCurrentFolder = async () => {
   try {
-    const res = await notesAPI.create({
+    const res = await notesAPI.createNote({
       title: '无标题笔记',
       content: '',
       folderId: route.params.id
@@ -340,7 +351,7 @@ const createChildFolder = async () => {
     return
   }
   try {
-    await foldersAPI.create({
+    await foldersAPI.createFolder({
       name: newChildFolderName.value,
       parentId: route.params.id
     })
@@ -360,7 +371,7 @@ const confirmDelete = (note) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await notesAPI.delete(note.id)
+      await notesAPI.deleteNote(note.id)
       ElMessage.success('删除成功')
       loadFolderDetail()
       loadFolders()
@@ -406,11 +417,11 @@ const onDrop = async (event, targetFolder) => {
   dragOverFolder.value = null
 
   if (!dragged || !targetFolder) return
-  if (dragged.id === targetFolder.id) return
+  if (String(dragged.id) === String(targetFolder.id)) return
 
   const flatFolders = flattenFolders(folders.value)
-  const draggedItem = flatFolders.find(f => f.id === dragged.id)
-  const targetItem = flatFolders.find(f => f.id === targetFolder.id)
+  const draggedItem = flatFolders.find(f => String(f.id) === String(dragged.id))
+  const targetItem = flatFolders.find(f => String(f.id) === String(targetFolder.id))
 
   if (!draggedItem || !targetItem) return
 
@@ -435,7 +446,7 @@ const onDrop = async (event, targetFolder) => {
 
     try {
       const folderIds = siblings.map(f => f.id)
-      await foldersAPI.reorder(folderIds)
+      await foldersAPI.reorderFolders({ folderIds })
       loadFolders()
     } catch (error) {
       ElMessage.error('保存排序失败')
@@ -452,7 +463,7 @@ const onDrop = async (event, targetFolder) => {
   }
 
   try {
-    await foldersAPI.update(dragged.id, { parentId: newParentId })
+    await foldersAPI.updateFolder(dragged.id, { parentId: newParentId })
     ElMessage.success('分类移动成功')
     loadFolders()
   } catch (error) {
@@ -464,7 +475,7 @@ const onDrop = async (event, targetFolder) => {
 
 const togglePinFolder = async (folder) => {
   try {
-    await foldersAPI.togglePin(folder.id)
+    await foldersAPI.pinFolder(folder.id)
     loadFolders()
   } catch (error) {
     ElMessage.error(error.message)
@@ -489,7 +500,7 @@ const updateFolderName = async () => {
   try {
     // 如果 parentId 为 null/undefined（用户清空了选择），发送 '0' 表示移除父级
     const parentIdValue = (editFolderForm.parentId === null || editFolderForm.parentId === undefined) ? '0' : editFolderForm.parentId
-    await foldersAPI.update(editFolderForm.id, {
+    await foldersAPI.updateFolder(editFolderForm.id, {
       name: editFolderForm.name,
       parentId: parentIdValue
     })
@@ -508,10 +519,10 @@ const confirmDeleteFolder = (folder) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await foldersAPI.delete(folder.id)
+      await foldersAPI.deleteFolder(folder.id)
       ElMessage.success('删除成功')
       loadFolders()
-      if (currentFolder.value === folder.id) {
+      if (String(currentFolder.value) === String(folder.id)) {
         goHome()
       }
     } catch (error) {
@@ -527,7 +538,7 @@ const confirmDeleteChild = (child) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await foldersAPI.delete(child.id)
+      await foldersAPI.deleteFolder(child.id)
       ElMessage.success('删除成功')
       loadFolders()
       loadFolderDetail()
@@ -544,7 +555,7 @@ const openAddChildFolder = (parentFolder) => {
 
 const createNoteInFolder = async (folder) => {
   try {
-    const res = await notesAPI.create({
+    const res = await notesAPI.createNote({
       title: '无标题笔记',
       content: '',
       folderId: folder.id
@@ -580,20 +591,22 @@ watch(() => route.params.id, (newId, oldId) => {
   overflow: hidden;
 }
 
-.main-content {
+.main-wrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: white;
+  background: #f5f7fa;
 }
 
-.content-header {
+.header-bar {
+  height: 60px;
+  padding: 0 20px;
+  background: white;
+  border-bottom: 1px solid #e4e7ed;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 15px 20px;
-  border-bottom: 1px solid #e4e7ed;
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -626,10 +639,39 @@ watch(() => route.params.id, (newId, oldId) => {
   color: #66b1ff;
 }
 
-.content-body {
+.content-area {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+}
+
+.footer-bar {
+  height: 50px;
+  padding: 0 20px;
+  background: white;
+  border-top: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.footer-link {
+  cursor: pointer;
+  color: #409eff;
+}
+
+.footer-link:hover {
+  color: #66b1ff;
+}
+
+.github-link {
+  color: #333;
+  text-decoration: none;
+}
+
+.github-link:hover {
+  color: #409eff;
 }
 
 .empty-state {
