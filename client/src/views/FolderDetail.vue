@@ -779,6 +779,9 @@ watch(() => route.params.id, (newId, oldId) => {
   opacity: 0;
   transition: opacity 0.2s;
   cursor: pointer;
+  font-size: 18px;
+  padding: 6px;
+  border-radius: 4px;
 }
 
 .folder-card-delete:hover {
@@ -841,6 +844,9 @@ watch(() => route.params.id, (newId, oldId) => {
   opacity: 0;
   transition: opacity 0.2s;
   cursor: pointer;
+  font-size: 18px;
+  padding: 6px;
+  border-radius: 4px;
 }
 
 .note-card:hover .delete-icon {

@@ -207,14 +207,14 @@ const handleSearch = () => {
 const createNote = async () => {
   const note = await sidebar.createNote('无标题笔记', '')
   if (note?.id) {
-    router.push(`/note/${note.id}`)
+    router.push(`/note/${note.id}?new=true`)
   }
 }
 
 const createNoteInFolder = async (folder: any) => {
   const note = await sidebar.createNoteInFolder(folder, '无标题笔记', '')
   if (note?.id) {
-    router.push(`/note/${note.id}`)
+    router.push(`/note/${note.id}?new=true`)
   }
 }
 
@@ -511,9 +511,18 @@ onMounted(() => {
 .delete-icon {
   color: #c0c4cc;
   cursor: pointer;
-  font-size: 16px;
-  padding: 2px;
-  transition: color 0.3s;
+  width: 32px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.delete-icon:hover {
+  color: #f56c6c;
+  background-color: rgba(245, 108, 108, 0.1);
 }
 
 .delete-icon:hover {

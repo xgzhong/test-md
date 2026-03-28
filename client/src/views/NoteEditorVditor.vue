@@ -196,7 +196,7 @@ const note = reactive({
   content: '',
   folderId: undefined,
   isNew: false,
-  version: 0
+  version: '0'
 })
 
 // 标记是否正在执行程序化导航（避免路由守卫重复确认）
@@ -383,13 +383,13 @@ const loadNote = async () => {
     note.title = res.note.title
     note.content = content
     note.folderId = res.note.folderId
-    note.version = parseInt(res.note.version) || 0
+    note.version = res.note.version
     note.isShared = res.note.isShared || false
 
     original.title = res.note.title || ''
     original.content = content
 
-    note.isNew = note.version === 0
+    note.isNew = note.version === '0'
 
     if (res.note.folderId) {
       currentFolder.value = res.note.folderId
@@ -438,10 +438,6 @@ const loadVersions = async () => {
 const saveNote = async () => {
   if (!note.id) return
 
-  if (note.version === 0 && !note.title && !note.content) {
-    return
-  }
-
   try {
     const res = await withRetry(() => notesAPI.updateNote(note.id, {
       title: note.title || '无标题笔记',
@@ -451,7 +447,7 @@ const saveNote = async () => {
 
     original.title = note.title || '无标题笔记'
     original.content = note.content
-    note.version = res.note?.v ? parseInt(res.note.version) : note.version + 1
+    note.version = res.note?.version ? res.note.version : note.version
     ui.hasUnsavedChanges = false
     note.isNew = false
 
@@ -478,7 +474,7 @@ const manualSave = async () => {
 
     original.title = note.title || '无标题笔记'
     original.content = note.content
-    note.version = res.note?.v ? parseInt(res.note.version) : note.version + 1
+    note.version = res.note?.version ? res.note.version : note.version
     ui.hasUnsavedChanges = false
     note.isNew = false
 
@@ -599,11 +595,12 @@ const confirmDeleteVersion = (v) => {
 
 // 统一的离开确认逻辑
 const confirmBeforeLeave = async () => {
-  // 只有在笔记已加载且确实是新的空笔记时才删除
-  // isNoteLoaded 防止误删正在加载中的已有笔记
-  if (isNoteLoaded && note.version === 0) {
-    const hasChanges = note.title !== original.title || note.content !== original.content
-    if (!hasChanges) {
+  const isNewNote = route.query.new === 'true'
+
+  // 新建空笔记未修改直接删除
+  if (isNewNote) {
+    const isEmptyNote = (!note.title || note.title === '无标题笔记') && !note.content
+    if (isEmptyNote) {
       try {
         await withRetry(() => notesAPI.deleteNote(note.id))
       } catch (error) {
@@ -626,7 +623,7 @@ const confirmBeforeLeave = async () => {
         resolve(true)
       }).catch(async (action) => {
         if (action === 'cancel') {
-          if (isNoteLoaded && note.version === 0) {
+          if (isNewNote) {
             try {
               await withRetry(() => notesAPI.deleteNote(note.id))
             } catch (error) {
@@ -647,7 +644,7 @@ const confirmBeforeLeave = async () => {
 const navigateToHome = async (shouldSave = false, shouldDelete = false) => {
   if (shouldSave) {
     await saveNote()
-  } else if (shouldDelete && note.version === 0) {
+  } else if (shouldDelete && route.query.new === 'true') {
     try {
       await withRetry(() => notesAPI.deleteNote(note.id))
     } catch (error) {
@@ -662,16 +659,23 @@ const navigateToHome = async (shouldSave = false, shouldDelete = false) => {
 
 // 处理选择分类
 const handleSelectFolder = async () => {
+  const isNewNote = route.query.new === 'true'
+
+  // 新建空笔记未修改直接删除
+  if (isNewNote) {
+    const isEmptyNote = (!note.title || note.title === '无标题笔记') && !note.content
+    if (isEmptyNote) {
+      await navigateToHome(false, true)
+      return
+    }
+  }
+
   const currentHasChanges = note.title !== original.title ||
                            note.content !== original.content ||
                            ui.hasUnsavedChanges
 
   if (!currentHasChanges) {
-    if (isNoteLoaded && note.version === 0 && !note.title && !note.content) {
-      await navigateToHome(false, true)
-    } else {
-      await navigateToHome(false, false)
-    }
+    await navigateToHome(false, false)
     return
   }
 
@@ -684,7 +688,7 @@ const handleSelectFolder = async () => {
     await navigateToHome(true, false)
   }).catch((action) => {
     if (action === 'cancel') {
-      navigateToHome(false, isNoteLoaded && note.version === 0)
+      navigateToHome(false, isNewNote)
     }
   })
 }
@@ -698,16 +702,26 @@ const handleOpenNote = (noteId) => {
 
 // 处理返回按钮
 const handleGoHome = async () => {
+  // 检查 URL 是否有 ?new=true 来判断是否是新创建的笔记
+  const isNewNote = route.query.new === 'true'
+  console.log('[DEBUG handleGoHome] isNewNote:', isNewNote, 'note.title:', note.title, 'note.content:', note.content)
+
+  // 新建空笔记未修改直接删除
+  if (isNewNote) {
+    const isEmptyNote = (!note.title || note.title === '无标题笔记') && !note.content
+    console.log('[DEBUG handleGoHome] isEmptyNote:', isEmptyNote)
+    if (isEmptyNote) {
+      await navigateToHome(false, true)
+      return
+    }
+  }
+
   const currentHasChanges = note.title !== original.title ||
                            note.content !== original.content ||
                            ui.hasUnsavedChanges
 
   if (!currentHasChanges) {
-    if (isNoteLoaded && note.version === 0 && !note.title && !note.content) {
-      await navigateToHome(false, true)
-    } else {
-      await navigateToHome(false, false)
-    }
+    await navigateToHome(false, false)
     return
   }
 
@@ -720,7 +734,7 @@ const handleGoHome = async () => {
     await navigateToHome(true, false)
   }).catch((action) => {
     if (action === 'cancel') {
-      navigateToHome(false, isNoteLoaded && note.version === 0)
+      navigateToHome(false, isNewNote)
     }
   })
 }
@@ -773,6 +787,8 @@ onMounted(() => {
     note.id = noteId
     currentNoteId = noteId
     isNoteLoaded = false
+    // 如果 URL 有 ?new=true，说明是新创建的笔记
+    note.isNew = route.query.new === 'true'
     initVditor('', () => {
       setTimeout(() => {
         loadNote()
@@ -806,6 +822,8 @@ watch(() => route.params.id, (newId) => {
     currentNoteId = newId
     note.id = newId
     isNoteLoaded = false
+    // 检查是否是新创建的笔记
+    note.isNew = route.query.new === 'true'
     loadNote()
     loadVersions()
   }
