@@ -279,7 +279,7 @@ const loadFolders = async () => {
     uncategorizedCount.value = res.uncategorizedCount
     loadAllNotesForSidebar()
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -330,7 +330,7 @@ const loadFolderDetail = async () => {
     totalCount.value = typeof tc === 'number' ? tc : (typeof tc === 'string' ? parseInt(tc, 10) : 0)
     pageMeta.value = res.metaData || null
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -389,7 +389,7 @@ const createNoteInCurrentFolder = async () => {
       router.push(`/note/${note.id}`)
     }
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -408,7 +408,7 @@ const createChildFolder = async () => {
     showAddChildDialog.value = false
     loadFolders()
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -424,7 +424,7 @@ const confirmDelete = (note) => {
       loadFolderDetail()
       loadFolders()
     } catch (error) {
-      ElMessage.error(error.message)
+      ElMessage.error(error instanceof Error ? error.message : '操作失败')
     }
   }).catch(() => {})
 }
@@ -526,7 +526,7 @@ const togglePinFolder = async (folder) => {
     await foldersAPI.pinFolder(folder.id)
     loadFolders()
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -556,7 +556,7 @@ const updateFolderName = async () => {
     showEditFolderDialog.value = false
     loadFolders()
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -574,7 +574,7 @@ const confirmDeleteFolder = (folder) => {
         goHome()
       }
     } catch (error) {
-      ElMessage.error(error.message)
+      ElMessage.error(error instanceof Error ? error.message : '操作失败')
     }
   }).catch(() => {})
 }
@@ -591,7 +591,7 @@ const confirmDeleteChild = (child) => {
       loadFolders()
       loadFolderDetail()
     } catch (error) {
-      ElMessage.error(error.message)
+      ElMessage.error(error instanceof Error ? error.message : '操作失败')
     }
   }).catch(() => {})
 }
@@ -612,7 +612,7 @@ const createNoteInFolder = async (folder) => {
       router.push(`/note/${note.id}`)
     }
   } catch (error) {
-    ElMessage.error(error.message)
+    ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
 }
 

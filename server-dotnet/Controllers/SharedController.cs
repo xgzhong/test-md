@@ -29,7 +29,7 @@ public class SharedController : BaseController
 
         if (note == null)
         {
-            return ReturnResult(Result.NotFound("笔记不存在或未分享"));
+            return ReturnResult(Result.NotFound("笔记不存在"));
         }
 
         return ReturnResult(Result.Success(new SharedNoteDto(
