@@ -281,9 +281,17 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 - **JWT Token** - Stored in HttpOnly Cookie to prevent XSS attacks
 - **Password Hashing** - BCrypt algorithm for secure storage
 - **XSS Protection** - Shared content sanitized with DOMPurify
-- **Rate Limiting** - Auth endpoints limited to 5 requests/minute
+- **Rate Limiting** - Auth: 5 req/min, Notes: 60 req/sec to prevent brute force
 - **CORS** - Strict cross-origin policy configuration
 - **Soft Delete** - Notes are soft-deleted and can be recovered
+- **Request Cancellation** - Auto-cancel pending requests on route change
+
+## Performance Optimization
+
+- **Editor Preloading** - Preload Vditor editor on note card hover
+- **N+1 Query Optimization** - Use bulk update instead of loop update
+- **Pagination** - Notes list supports paginated loading
+- **Request Deduplication** - Note auto-save with debounce
 
 ## FAQ
 

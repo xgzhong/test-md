@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using server_dotnet.Common.Paging;
 using server_dotnet.Common.Result;
@@ -16,6 +17,7 @@ namespace server_dotnet.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting("notes")]
 public class NotesController : BaseController
 {
     private readonly AppDbContext _context;
@@ -478,20 +480,18 @@ public class NotesController : BaseController
     /// </summary>
     private async Task CleanupOldVersionsAsync(long noteId)
     {
-        var oldVersions = await _context.NoteVersions
+        var versionIdsToDelete = await _context.NoteVersions
             .Where(v => v.NoteId == noteId && !v.IsDeleted)
             .OrderByDescending(v => v.CreatedAt)
             .Skip(AppConstants.MaxVersionsToKeep)
+            .Select(v => v.Id)
             .ToListAsync();
 
-        foreach (var version in oldVersions)
+        if (versionIdsToDelete.Count > 0)
         {
-            version.IsDeleted = true;
-        }
-
-        if (oldVersions.Count > 0)
-        {
-            await _context.SaveChangesAsync();
+            await _context.NoteVersions
+                .Where(v => versionIdsToDelete.Contains(v.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsDeleted, true));
         }
     }
 

@@ -79,7 +79,13 @@
       <!-- 内容区 -->
       <main class="content-area">
         <div class="content-area" :class="{ 'wide-mode': isWideMode }">
-          <div id="vditor" class="vditor-editor"></div>
+          <div class="vditor-editor">
+            <div v-if="vditorLoading" class="vditor-loading-overlay">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <p>编辑器加载中...</p>
+            </div>
+            <div id="vditor"></div>
+          </div>
         </div>
       </main>
 
@@ -157,13 +163,13 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back } from '@element-plus/icons-vue'
+import { Back, Loading } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { notesAPI, foldersAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
-import Vditor from 'vditor'
 import packageJson from '../../package.json'
+import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 
 const router = useRouter()
@@ -171,6 +177,16 @@ const route = useRoute()
 
 // Constants
 const AUTO_SAVE_DEBOUNCE_MS = 3000
+
+// Request cancellation
+let abortController = null
+
+const cancelPendingRequests = () => {
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
+}
 
 // 侧边栏宽度
 const sidebarWidth = ref(380)
@@ -201,7 +217,6 @@ const note = reactive({
 
 // 标记是否正在执行程序化导航（避免路由守卫重复确认）
 let isProgrammaticNavigation = false
-let isNoteLoaded = false
 
 // UI 状态
 const ui = reactive({
@@ -226,6 +241,7 @@ const noteVersions = ref([])
 const currentFolder = ref(null)
 
 let vditor = null
+const vditorLoading = ref(true)
 let savedTipTimer = null
 let inputTimer = null
 let isMounted = true
@@ -287,15 +303,21 @@ const handleBreadcrumbClick = () => {
 const renderVersionContent = computed(() => {
   if (!ui.selectedVersion) return ''
   const html = marked(ui.selectedVersion.content || '')
-  return DOMPurify.sanitize(html)
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote',
+                   'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                   'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class']
+  })
 })
 
 // 重试机制
-const withRetry = async (fn, retries = 3, delay = 1000) => {
+const withRetry = async (fn, retries = 3, delay = 1000, signal) => {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn()
     } catch (error) {
+      if (signal && signal.aborted) throw new Error('cancelled')
       if (i === retries - 1) throw error
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1)))
     }
@@ -303,6 +325,7 @@ const withRetry = async (fn, retries = 3, delay = 1000) => {
 }
 
 const initVditor = (content, onReady) => {
+  vditorLoading.value = true
   if (vditor) {
     vditor.destroy()
     vditor = null
@@ -315,6 +338,7 @@ const initVditor = (content, onReady) => {
     lang: 'zh_CN',
     tip: false,
     after: () => {
+      vditorLoading.value = false
       if (onReady) onReady()
     },
     toolbar: [
@@ -371,8 +395,11 @@ const updateVditor = (content) => {
 }
 
 const loadNote = async () => {
+  cancelPendingRequests()
+  abortController = new AbortController()
+
   try {
-    const noteData = await withRetry(() => notesAPI.getNote(note.id))
+    const noteData = await withRetry(() => notesAPI.getNote(note.id), 3, 1000, abortController.signal)
     // Ignore if route changed while request was in flight
     if (String(currentNoteId) !== String(note.id)) return
 
@@ -403,7 +430,6 @@ const loadNote = async () => {
       if (vditor && content !== undefined) {
         vditor.setValue(content)
       }
-      isNoteLoaded = true
     }, 300)
   } catch (error) {
     if (String(currentNoteId) === String(note.id)) {
@@ -704,12 +730,9 @@ const handleOpenNote = (noteId) => {
 const handleGoHome = async () => {
   // 检查 URL 是否有 ?new=true 来判断是否是新创建的笔记
   const isNewNote = route.query.new === 'true'
-  console.log('[DEBUG handleGoHome] isNewNote:', isNewNote, 'note.title:', note.title, 'note.content:', note.content)
-
   // 新建空笔记未修改直接删除
   if (isNewNote) {
     const isEmptyNote = (!note.title || note.title === '无标题笔记') && !note.content
-    console.log('[DEBUG handleGoHome] isEmptyNote:', isEmptyNote)
     if (isEmptyNote) {
       await navigateToHome(false, true)
       return
@@ -786,7 +809,6 @@ onMounted(() => {
   if (noteId) {
     note.id = noteId
     currentNoteId = noteId
-    isNoteLoaded = false
     // 如果 URL 有 ?new=true，说明是新创建的笔记
     note.isNew = route.query.new === 'true'
     initVditor('', () => {
@@ -821,7 +843,6 @@ watch(() => route.params.id, (newId) => {
   if (newId) {
     currentNoteId = newId
     note.id = newId
-    isNoteLoaded = false
     // 检查是否是新创建的笔记
     note.isNew = route.query.new === 'true'
     loadNote()
@@ -831,6 +852,7 @@ watch(() => route.params.id, (newId) => {
 
 onBeforeUnmount(() => {
   isMounted = false
+  cancelPendingRequests()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (vditor) {
     vditor.destroy()
@@ -939,8 +961,14 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   padding: 10px;
-  overflow: auto;
+  overflow: hidden;
   background: #f5f7fa;
+  min-height: 0;
+}
+
+.content-area > .content-area {
+  display: flex;
+  flex-direction: column;
 }
 
 .content-area.wide-mode {
@@ -955,6 +983,34 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   overflow: hidden;
   background: white;
+  position: relative;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+#vditor {
+  flex: 1;
+  min-height: 400px;
+}
+
+.vditor-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
+}
+
+.vditor-loading-overlay p {
+  margin-top: 10px;
+  font-size: 14px;
 }
 
 .footer-bar {
@@ -990,17 +1046,21 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 400px;
 }
 
 :deep(.vditor-toolbar) {
   border-bottom: 1px solid #e4e7ed;
   justify-content: flex-start !important;
+  flex-shrink: 0;
 }
 
 :deep(.vditor-content) {
   flex: 1;
   background: white;
   overflow: auto;
+  min-height: 0;
+  height: 0;
 }
 
 :deep(.vditor-reset) {
@@ -1021,7 +1081,7 @@ onBeforeUnmount(() => {
 
 .content-area:not(.wide-mode) :deep(.vditor-toolbar--pin),
 .content-area:not(.wide-mode) :deep(.vditor-reset) {
-  padding-left: 50 !important;
-  padding-right: 50 !important;
+  padding-left: 50px !important;
+  padding-right: 50px !important;
 }
 </style>

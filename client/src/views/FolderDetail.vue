@@ -1,5 +1,5 @@
 <template>
-  <div class="main-layout" @click="handleOutsideClick">
+  <div class="main-layout">
     <!-- 侧边栏 -->
     <Sidebar
       :collapsed="sidebarCollapsed"
@@ -622,8 +622,6 @@ const createNoteInFolder = async (folder) => {
     ElMessage.error(error.message)
   }
 }
-
-const handleOutsideClick = () => {}
 
 onMounted(() => {
   loadFolders().then(() => {

@@ -87,7 +87,7 @@
         </div>
 
         <div v-else class="notes-grid">
-          <div v-for="note in notes" :key="note.id" class="note-card" @click="editNote(note.id)">
+          <div v-for="note in notes" :key="note.id" class="note-card" @click="editNote(note.id)" @mouseenter="preloadEditor">
             <div class="note-card-header">
               <h3>{{ note.title }}</h3>
               <el-icon class="delete-icon" @click.stop="confirmDelete(note)"><Delete /></el-icon>
@@ -341,20 +341,21 @@ const logout = async () => {
   }
 }
 
+// 预加载笔记编辑器组件（只预加载一次）
+let editorPreloaded = false
+const preloadEditor = () => {
+  if (editorPreloaded) return
+  editorPreloaded = true
+  const preload = () => import('../views/NoteEditorVditor.vue')
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(preload, { timeout: 3000 })
+  } else {
+    setTimeout(preload, 1000)
+  }
+}
+
 onMounted(() => {
   authStore.initAuth()
-
-  // 预加载笔记编辑器组件，不阻塞主线程
-  const preloadEditor = () => {
-    // 使用 requestIdleCallback 在浏览器空闲时预加载，兼容 Safari
-    const preload = () => import('../views/NoteEditorVditor.vue')
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(preload, { timeout: 3000 })
-    } else {
-      setTimeout(preload, 1000)
-    }
-  }
-
   // 延迟执行，等首页数据加载完成后再预加载
   setTimeout(preloadEditor, 500)
 })

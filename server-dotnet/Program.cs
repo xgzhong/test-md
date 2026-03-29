@@ -150,6 +150,13 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 60,
                 Window = TimeSpan.FromMinutes(1)
             }));
+    options.AddPolicy("notes", context =>
+        RateLimitPartition.GetFixedWindowLimiter("notes", _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = AppConstants.NotesRateLimitPermitCount,
+                Window = TimeSpan.FromSeconds(AppConstants.NotesRateLimitWindowSeconds)
+            }));
 });
 
 // Configure CORS with restrictive policy

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using server_dotnet.Common.Result;
 using server_dotnet.Data;
@@ -12,6 +13,7 @@ namespace server_dotnet.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting("notes")]
 public class FoldersController : BaseController
 {
     private readonly AppDbContext _context;

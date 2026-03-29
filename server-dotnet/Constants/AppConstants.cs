@@ -21,6 +21,8 @@ public static class AppConstants
     // Rate Limiting
     public const int AuthRateLimitPermitCount = 5;
     public const int AuthRateLimitWindowMinutes = 1;
+    public const int NotesRateLimitPermitCount = 60;
+    public const int NotesRateLimitWindowSeconds = 60;
 
     // Auto-save
     public const int AutoSaveDebounceMs = 3000;
