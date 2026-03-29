@@ -388,6 +388,60 @@ const initVditor = (content, onReady) => {
     toolbarConfig: {
       pin: true
     },
+    upload: {
+      max: 10 * 1024 * 1024,  // 10MB
+      linkToImgUrl: '/api/oss/presigned-url',
+      handler: async (files) => {
+        const file = files[0]
+        if (!file) return
+
+        try {
+          // 获取预签名 URL
+          const response = await fetch('/api/oss/presigned-url', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileSize: file.size,
+              contentType: file.type,
+              noteId: note.id || 'new'
+            })
+          })
+
+          if (!response.ok) {
+            const err = await response.json()
+            ElMessage.error(err.error || '获取上传链接失败')
+            return
+          }
+
+          const data = await response.json()
+
+          // 直接上传到 OSS
+          const uploadResponse = await fetch(data.uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream'
+            },
+            body: file
+          })
+
+          if (uploadResponse.ok) {
+            // 上传成功，插入图片链接到编辑器
+            const imgLink = `![${file.name}](${data.finalUrl})`
+            vditor.insertValue(imgLink)
+            ElMessage.success('上传成功')
+          } else {
+            ElMessage.error('文件上传失败')
+          }
+        } catch (error) {
+          console.error('Upload error:', error)
+          ElMessage.error('上传失败，请重试')
+        }
+        return false  // 阻止 Vditor 默认上传行为
+      }
+    },
     valueType: 'markdown',
     input: (value) => {
       note.content = value

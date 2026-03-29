@@ -12,6 +12,9 @@ server-dotnet/.vs/
 *.user
 *.suo
 
+# 配置文件（包含敏感信息）
+appsettings.Development.json
+
 # 环境变量
 .env
 .env.local
