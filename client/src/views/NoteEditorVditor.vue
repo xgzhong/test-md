@@ -395,46 +395,56 @@ const initVditor = (content, onReady) => {
         const file = files[0]
         if (!file) return
 
+        // 从 cookie 获取 token
+        const getToken = () => {
+          const cookies = document.cookie.split('; ')
+          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
+          return tokenCookie ? tokenCookie.split('=')[1] : null
+        }
+
         try {
-          // 获取预签名 URL
-          const response = await fetch('/api/oss/presigned-url', {
+          // 1. 获取预签名 URL
+          const token = getToken()
+          const presignedResponse = await fetch('/api/oss/presigned-url', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
             body: JSON.stringify({
               fileName: file.name,
               fileSize: file.size,
-              contentType: file.type,
+              contentType: file.type || 'application/octet-stream',
               noteId: note.id || 'new'
             })
           })
 
-          if (!response.ok) {
-            const err = await response.json()
+          if (!presignedResponse.ok) {
+            const err = await presignedResponse.json()
             ElMessage.error(err.error || '获取上传链接失败')
-            return
+            return false
           }
 
-          const data = await response.json()
+          const { uploadUrl, finalUrl } = await presignedResponse.json()
 
-          // 直接上传到 OSS
-          const uploadResponse = await fetch(data.uploadUrl, {
+          // 2. 直接上传到 OSS
+          const uploadResponse = await fetch(uploadUrl, {
             method: 'PUT',
+            body: file,
             headers: {
               'Content-Type': file.type || 'application/octet-stream'
-            },
-            body: file
+            }
           })
 
-          if (uploadResponse.ok) {
-            // 上传成功，插入图片链接到编辑器
-            const imgLink = `![${file.name}](${data.finalUrl})`
-            vditor.insertValue(imgLink)
-            ElMessage.success('上传成功')
-          } else {
-            ElMessage.error('文件上传失败')
+          if (!uploadResponse.ok) {
+            ElMessage.error('上传到云存储失败')
+            return false
           }
+
+          // 3. 上传成功，插入图片链接到编辑器
+          const imgLink = `![${file.name}](${finalUrl})`
+          vditor.insertValue(imgLink)
+          ElMessage.success('上传成功')
         } catch (error) {
           console.error('Upload error:', error)
           ElMessage.error('上传失败，请重试')
