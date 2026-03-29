@@ -296,8 +296,8 @@ const breadcrumbPath = computed(() => {
 })
 
 // 点击面包屑项切换分类
-const handleBreadcrumbClick = () => {
-  router.push('/home')
+const handleBreadcrumbClick = (folder) => {
+  router.push(`/folder/${folder.id}`)
 }
 
 const renderVersionContent = computed(() => {

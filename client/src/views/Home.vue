@@ -567,10 +567,6 @@ onMounted(() => {
   background-color: rgba(245, 108, 108, 0.1);
 }
 
-.delete-icon:hover {
-  color: #f56c6c;
-}
-
 .note-meta {
   font-size: 12px;
   color: #909399;

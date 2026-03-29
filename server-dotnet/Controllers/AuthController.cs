@@ -158,14 +158,13 @@ public class AuthController : BaseController
 
     private void SetAuthCookie(string token)
     {
-        // Only use Secure flag for HTTPS connections
-        // In production, the app should be behind a reverse proxy that sets the correct scheme
+        // Always use Strict mode for security; production must use HTTPS
         var isSecure = Request.Scheme == "https";
         Response.Cookies.Append("auth_token", token, new CookieOptions
         {
             HttpOnly = true,
             Secure = isSecure,
-            SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
+            SameSite = SameSiteMode.Strict,
             Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(AppConstants.TokenExpirationDays)
         });
