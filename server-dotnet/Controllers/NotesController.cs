@@ -62,7 +62,8 @@ public class NotesController : BaseController
 
         if (!string.IsNullOrEmpty(search) && search.Length <= 100)
         {
-            query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
+            var escapedSearch = EscapeForLike(search);
+            query = query.Where(n => n.Title.Contains(escapedSearch) || n.Content.Contains(escapedSearch));
         }
 
         // 获取总数
@@ -146,7 +147,8 @@ public class NotesController : BaseController
 
         if (!string.IsNullOrEmpty(search) && search.Length <= 100)
         {
-            query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
+            var escapedSearch = EscapeForLike(search);
+            query = query.Where(n => n.Title.Contains(escapedSearch) || n.Content.Contains(escapedSearch));
         }
 
         // 获取总数
@@ -509,15 +511,32 @@ public class NotesController : BaseController
 
     /// <summary>
     /// Generate cryptographically secure token for share URLs
+    /// Token is stored as SHA256 hash for security
     /// </summary>
     private static string GenerateSecureToken()
     {
         var bytes = new byte[AppConstants.ShareTokenLength];
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(bytes);
-        return Convert.ToBase64String(bytes)
+        var plaintextToken = Convert.ToBase64String(bytes)
             .Replace("+", "-")
             .Replace("/", "_")
             .Replace("=", "");
+        // Return SHA256 hash of the token for storage
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(plaintextToken));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Escape special characters for SQL LIKE queries to prevent injection
+    /// </summary>
+    private static string EscapeForLike(string? input)
+    {
+        if (string.IsNullOrEmpty(input)) return input ?? string.Empty;
+        return input
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]");
     }
 }

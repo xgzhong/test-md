@@ -24,6 +24,10 @@ public class Note
     [Required]
     public bool IsShared { get; set; } = false;
 
+    /// <summary>
+    /// Share token stored as SHA256 hash for security
+    /// </summary>
+    [MaxLength(64)]
     public string? ShareToken { get; set; }
 
     [Required]
