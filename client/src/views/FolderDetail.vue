@@ -47,6 +47,20 @@
             <el-breadcrumb-item>{{ currentFolderData?.name }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
+        <div class="header-right">
+          <router-link to="/about" class="about-link">
+            <el-icon><InfoFilled /></el-icon>
+            <span>关于</span>
+          </router-link>
+          <el-divider direction="vertical" />
+          <el-icon class="user-icon"><User /></el-icon>
+          <span class="username">{{ authStore.user?.username || authStore.user?.email }}</span>
+          <el-divider direction="vertical" />
+          <el-button type="info" size="small" text @click="logout">
+            <el-icon><SwitchButton /></el-icon>
+            <span>退出</span>
+          </el-button>
+        </div>
       </header>
 
       <!-- 内容区 -->
@@ -119,6 +133,18 @@
         </div>
       </main>
 
+      <!-- 分页 -->
+      <div v-if="totalPages > 1" class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="totalCount"
+          background
+          layout="prev, pager, next"
+          @current-change="handlePageChange"
+        />
+      </div>
+
       <!-- 底部区 -->
       <footer class="footer-bar">
         <p>
@@ -184,14 +210,16 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Delete, Folder } from '@element-plus/icons-vue'
+import { Back, Delete, Folder, User, SwitchButton, InfoFilled } from '@element-plus/icons-vue'
 import { notesAPI, foldersAPI } from '../api'
+import { useAuthStore } from '../stores/auth'
 import Sidebar from '../components/Sidebar.vue'
 import { flattenFolders, getParentIdStr, isSameParentId, isDescendant, formatDate, escapeHtml } from '../composables/useCommon'
 import packageJson from '../../package.json'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
 const sidebarCollapsed = ref(false)
 const sidebarWidth = ref(380)
@@ -203,6 +231,13 @@ const uncategorizedCount = ref(0)
 const notes = ref([])
 const currentFolderData = ref(null)
 const parentFolder = ref(null)
+
+// 分页状态
+const currentPage = ref(1)
+const pageSize = ref(15)
+const totalCount = ref(0)
+const pageMeta = ref(null)
+const totalPages = computed(() => pageMeta.value?.totalPages ?? 0)
 
 // 拖拽状态
 const draggedFolder = ref(null)
@@ -291,10 +326,16 @@ const loadFolderDetail = async () => {
       parentFolder.value = null
     }
 
-    // 加载该分类下的笔记
-    const res = await notesAPI.getNotes({ folderId: folderId })
-    notes.value = res.notes || []
-    totalNotes.value = res.totalCount || 0
+    // 加载该分类下的笔记（分页）
+    const res = await notesAPI.getPageNotes({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      folderId: folderId
+    })
+    notes.value = res.items || []
+    const tc = res.metaData?.totalCount
+    totalCount.value = typeof tc === 'number' ? tc : (typeof tc === 'string' ? parseInt(tc, 10) : 0)
+    pageMeta.value = res.metaData || null
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -314,6 +355,20 @@ const goToParent = () => {
 
 const goToFolder = (folderId) => {
   router.push(`/folder/${folderId}`)
+}
+
+const handlePageChange = () => {
+  loadFolderDetail()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const logout = async () => {
+  try {
+    await ElMessageBox.confirm('确定要退出登录吗？', '提示', { type: 'warning' })
+    await authStore.logout()
+  } catch (e) {
+    // User cancelled - no action needed
+  }
 }
 
 const handleSelectFolder = (folderId) => {
@@ -579,6 +634,7 @@ onMounted(() => {
 // 监听路由变化，重新加载分类详情
 watch(() => route.params.id, (newId, oldId) => {
   if (newId && newId !== oldId) {
+    currentPage.value = 1 // 切换分类时重置页码
     loadFolderDetail()
   }
 })
@@ -606,6 +662,7 @@ watch(() => route.params.id, (newId, oldId) => {
   border-bottom: 1px solid #e4e7ed;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-shrink: 0;
 }
 
@@ -618,6 +675,33 @@ watch(() => route.params.id, (newId, oldId) => {
 .header-right {
   display: flex;
   gap: 10px;
+}
+
+.header-right .user-icon {
+  font-size: 18px;
+  color: #409eff;
+}
+
+.header-right .username {
+  color: #606266;
+  font-size: 14px;
+}
+
+.header-right .el-divider {
+  margin: 0 4px;
+}
+
+.about-link {
+  color: #409eff;
+  text-decoration: none;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.about-link:hover {
+  color: #66b1ff;
 }
 
 .home-icon {
@@ -648,7 +732,19 @@ watch(() => route.params.id, (newId, oldId) => {
 .footer-bar {
   height: 50px;
   padding: 0 20px;
-  background: white;
+  background: #f5f7fa;
+  border-top: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 分页 */
+.pagination-container {
+  height: 50px;
+  padding: 0 20px;
+  background: #f5f7fa;
   border-top: 1px solid #e4e7ed;
   display: flex;
   align-items: center;

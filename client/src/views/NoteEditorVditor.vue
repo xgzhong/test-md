@@ -455,7 +455,7 @@ const saveNote = async () => {
     if (savedTipTimer) clearTimeout(savedTipTimer)
     savedTipTimer = setTimeout(() => {
       if (isMounted) ui.showSavedTip = false
-    }, 2000)
+    }, 3000)
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -482,7 +482,7 @@ const manualSave = async () => {
     if (savedTipTimer) clearTimeout(savedTipTimer)
     savedTipTimer = setTimeout(() => {
       if (isMounted) ui.showSavedTip = false
-    }, 2000)
+    }, 3000)
     ElMessage.success('保存成功')
   } catch (error) {
     ElMessage.error(error.message)

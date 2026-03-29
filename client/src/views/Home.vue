@@ -6,7 +6,7 @@
       :collapsed="sidebarCollapsed"
       :width="sidebarWidth"
       :currentFolder="currentFolder"
-      :totalNotes="totalNotes"
+      :totalNotes="totalNotesForSidebar"
       :uncategorizedCount="sidebar.uncategorizedCount.value"
       :dragOverFolder="sidebar.dragOverFolder.value"
       :draggedFolder="sidebar.draggedFolder.value"
@@ -45,7 +45,10 @@
           </el-input>
         </div>
         <div class="header-right">
-          <router-link to="/about" class="about-link">关于</router-link>
+          <router-link to="/about" class="about-link">
+            <el-icon><InfoFilled /></el-icon>
+            <span>关于</span>
+          </router-link>
           <el-divider direction="vertical" />
           <el-icon class="user-icon"><User /></el-icon>
           <span class="username">{{ authStore.user?.username || authStore.user?.email }}</span>
@@ -99,6 +102,18 @@
         </div>
       </main>
 
+      <!-- 分页 -->
+      <div v-if="totalPages > 1" class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="totalCount"
+          background
+          layout="prev, pager, next"
+          @current-change="handlePageChange"
+        />
+      </div>
+
       <!-- 底部区 -->
       <footer class="footer-bar">
         <p>
@@ -134,12 +149,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Delete, User, SwitchButton } from '@element-plus/icons-vue'
+import { Search, Delete, User, SwitchButton, InfoFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import Sidebar from '../components/Sidebar.vue'
 import { useSidebar } from '../composables/useSidebar'
 import { formatDate, escapeHtml } from '../composables/useCommon'
-import type { Note } from '../api'
+import { notesAPI, type Note, type Folder, type PagedMetaData } from '../api'
 import packageJson from '../../package.json'
 
 const router = useRouter()
@@ -154,19 +169,29 @@ const sidebarWidth = ref(380)
 const editFolderInputRef = ref<HTMLInputElement | null>(null)
 const notes = ref<Note[]>([])
 
+// 分页状态
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalCount = ref(0)
+const pageMeta = ref<PagedMetaData | null>(null)
+
 const showFolderDialog = ref(false)
 const showEditFolderDialog = ref(false)
-const editFolderForm = ref({ id: null as number | null, name: '', parentId: null as number | null })
+const editFolderForm = ref({ id: null as string | null, name: '', parentId: null as string | null })
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
-const totalNotes = computed(() => notes.value.length)
+const totalPages = computed(() => pageMeta.value?.totalPages ?? 0)
+const totalNotesForSidebar = computed(() => typeof totalCount.value === 'number' ? totalCount.value : Number(totalCount.value) || 0)
 
 const onSidebarLoaded = async () => {
   await loadNotes()
 }
 
 const loadNotes = async () => {
-  const params: Record<string, any> = {}
+  const params: Record<string, string | number | undefined> = {
+    page: currentPage.value,
+    pageSize: pageSize.value
+  }
   if (currentFolder.value !== null && currentFolder.value !== 'uncategorized') {
     params.folderId = currentFolder.value
   } else if (currentFolder.value === 'uncategorized') {
@@ -176,11 +201,13 @@ const loadNotes = async () => {
     params.search = searchText.value
   }
   try {
-    // 笔记加载（分类已在 Sidebar 初始化时加载）
-    await sidebar.loadNotes(params)
-    notes.value = sidebar.notes.value
-  } catch (error: any) {
-    ElMessage.error(error?.message || '加载笔记失败')
+    const res = await notesAPI.getPageNotes(params)
+    notes.value = res.items || []
+    const tc = res.metaData?.totalCount
+    totalCount.value = typeof tc === 'number' ? tc : (typeof tc === 'string' ? parseInt(tc, 10) : 0)
+    pageMeta.value = res.metaData || null
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : '加载笔记失败')
   }
 }
 
@@ -193,14 +220,21 @@ const selectFolder = (folderId: number | string | null) => {
     router.push(`/folder/${folderId}`)
     return
   }
+  currentPage.value = 1 // 切换文件夹时重置页码
   loadNotes()
 }
 
 const handleSearch = () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
+    currentPage.value = 1 // 搜索时重置页码
     loadNotes()
   }, 300)
+}
+
+const handlePageChange = () => {
+  loadNotes()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const createNote = async () => {
@@ -210,7 +244,7 @@ const createNote = async () => {
   }
 }
 
-const createNoteInFolder = async (folder: any) => {
+const createNoteInFolder = async (folder: Folder) => {
   const note = await sidebar.createNoteInFolder(folder, '无标题笔记', '')
   if (note?.id) {
     router.push(`/note/${note.id}?new=true`)
@@ -240,8 +274,8 @@ const createWorkLog = async () => {
   }
 }
 
-const editNote = (id: number) => router.push(`/note/${id}`)
-const openNote = (id: number) => router.push(`/note/${id}`)
+const editNote = (id: string | number) => router.push(`/note/${id}`)
+const openNote = (id: string | number) => router.push(`/note/${id}`)
 
 const confirmDelete = async (note: Note) => {
   try {
@@ -253,7 +287,7 @@ const confirmDelete = async (note: Note) => {
   }
 }
 
-const confirmDeleteFolder = async (folder: any) => {
+const confirmDeleteFolder = async (folder: Folder) => {
   try {
     await ElMessageBox.confirm(`确定要删除分类"${folder.name}"吗？删除后该分类下的笔记将变为未分类。`, '提示', { type: 'warning' })
     await sidebar.deleteFolder(folder.id)
@@ -270,15 +304,14 @@ const openAddChildFolder = (parentFolder: any) => {
   // 通过 sidebar 的 createFolder 方法处理
 }
 
-const togglePinFolder = async (folder: any) => {
+const togglePinFolder = async (folder: Folder) => {
   await sidebar.togglePinFolder(folder.id)
 }
 
-const editFolderName = (folder: any) => {
+const editFolderName = (folder: Folder) => {
   editFolderForm.value.id = folder.id
   editFolderForm.value.name = folder.name
-  const pid = folder.parentId ? String(folder.parentId) : '0'
-  editFolderForm.value.parentId = pid === '0' ? null : folder.parentId
+  editFolderForm.value.parentId = folder.parentId === '0' ? null : folder.parentId
   showEditFolderDialog.value = true
 }
 
@@ -384,6 +417,9 @@ onMounted(() => {
   color: #409eff;
   text-decoration: none;
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .about-link:hover {
@@ -551,11 +587,23 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+/* 分页 */
+.pagination-container {
+  height: 50px;
+  padding: 0 20px;
+  background: #f5f7fa;
+  border-top: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* 底部区 */
 .footer-bar {
   height: 50px;
   padding: 0 20px;
-  background: white;
+  background: #f5f7fa;
   border-top: 1px solid #e4e7ed;
   display: flex;
   align-items: center;

@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using server_dotnet.Common.Paging;
 using server_dotnet.Common.Result;
 using server_dotnet.Constants;
 using server_dotnet.Data;
@@ -22,6 +24,79 @@ public class NotesController : BaseController
     {
         _context = context;
     }
+
+    [HttpGet("page")]
+    public async Task<IActionResult> GetPageNotes(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 15,
+        [FromQuery] string? folderId = null,
+        [FromQuery] string? search = null)
+    {
+        var userId = GetUserId();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
+
+        // Validate pagination parameters
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 15;
+        if (pageSize > 100) pageSize = 100;
+
+        var query = _context.Notes
+            .Where(n => n.UserId == userId && !n.IsDeleted)
+            .Include(n => n.Folder)
+            .AsQueryable();
+
+        // 处理 folderId 筛选
+        if (!string.IsNullOrEmpty(folderId))
+        {
+            if (folderId == "null")
+            {
+                query = query.Where(n => n.FolderId == null);
+            }
+            else if (long.TryParse(folderId, out var fid))
+            {
+                query = query.Where(n => n.FolderId == fid);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(search) && search.Length <= 100)
+        {
+            query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
+        }
+
+        // 获取总数
+        var totalCount = await query.CountAsync();
+
+        // 获取分页数据
+        var notes = await query
+            .OrderByDescending(n => n.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(n => new NoteDto(
+                n.Id,
+                n.FolderId,
+                n.Folder != null ? n.Folder.Name : null,
+                n.Title,
+                n.Content,
+                n.IsShared,
+                n.ShareToken,
+                n.Version,
+                n.CreatedAt,
+                n.UpdatedAt
+            ))
+            .ToListAsync();
+
+        // 构建分页响应
+        var pagination = new Pagination { CurrentPage = page, PageSize = pageSize };
+        var pagedList = new PagedList<NoteDto>(notes, totalCount, pagination);
+        var response = new PagedResponse<NoteDto>
+        {
+            Items = notes,
+            MetaData = pagedList.MetaData
+        };
+
+        return ReturnResult(Result.Success(response, "获取成功"));
+    }
+    
 
     [HttpGet]
     public async Task<IActionResult> GetNotes([FromQuery] string? folderId, [FromQuery] string? search)

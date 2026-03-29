@@ -35,34 +35,34 @@ public abstract class BaseController : ControllerBase
                     var value = result.GetValue();
                     if (value is null)
                         return NoContent();
-                    return Ok(Result.Success(value, result.Message));
+                    return Ok(value);
                 }
             case ResultStatus.Error:
                 return result.Errors is null
-                    ? BadRequest(Result.Failure(result.Message ?? "操作失败"))
-                    : BadRequest(Result.Failure(result.Errors.Prepend(result.Message ?? "操作失败").ToArray()));
+                    ? BadRequest(result.Message ?? "操作失败")
+                    : BadRequest(result.Errors.Prepend(result.Message ?? "操作失败").ToArray());
 
             case ResultStatus.NotFound:
                 return result.Errors is null
-                    ? NotFound(Result.NotFound(result.Message ?? "资源不存在"))
-                    : NotFound(Result.NotFound(result.Errors.Prepend(result.Message ?? "资源不存在").ToArray()));
+                    ? NotFound(result.Message ?? "资源不存在")
+                    : NotFound(result.Errors.Prepend(result.Message ?? "资源不存在").ToArray());
 
             case ResultStatus.Invalid:
                 return result.Errors is null
-                    ? BadRequest(Result.Invalid(result.Message ?? "操作无效"))
-                    : BadRequest(Result.Invalid(result.Errors.Prepend(result.Message ?? "操作无效").ToArray()));
+                    ? BadRequest(result.Message ?? "操作无效")
+                    : BadRequest(result.Errors.Prepend(result.Message ?? "操作无效").ToArray());
 
             case ResultStatus.Forbidden:
-                return StatusCode(403, Result.Failure(result.Message ?? "拒绝访问"));
+                return StatusCode(403, result.Message ?? "拒绝访问");
 
             case ResultStatus.Unauthorized:
                 {
                     var msg = result.Message ?? "请先登录";
-                    return Unauthorized(Result.Unauthorized(msg));
+                    return Unauthorized(msg);
                 }
 
             default:
-                return BadRequest(Result.Failure(result.Errors?.ToArray() ?? new[] { result.Message ?? "未知错误" }));
+                return BadRequest(result.Errors?.ToArray() ?? new[] { result.Message ?? "未知错误" });
         }
     }
 }

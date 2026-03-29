@@ -128,6 +128,11 @@ public class Result : Result<Result>
         return new Result(ResultStatus.Forbidden);
     }
 
+    public static Result Forbidden(string message)
+    {
+        return new Result(ResultStatus.Forbidden) { Message = message };
+    }
+
     public static Result Unauthorized()
     {
         return new Result(ResultStatus.Unauthorized);

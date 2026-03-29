@@ -224,13 +224,20 @@ public class FoldersController : BaseController
         var userId = GetUserId();
         if (userId == null) return ReturnResult(Result.Unauthorized());
 
+        // 验证所有文件夹都存在且属于当前用户
+        var folders = await _context.Folders
+            .Where(f => folderIds.Contains(f.Id) && f.UserId == userId)
+            .ToListAsync();
+
+        if (folders.Count != folderIds.Distinct().Count())
+        {
+            return ReturnResult(Result.Forbidden("存在无权操作的分类"));
+        }
+
         for (int i = 0; i < folderIds.Count; i++)
         {
-            var folder = await _context.Folders.FindAsync(folderIds[i]);
-            if (folder != null && folder.UserId == userId)
-            {
-                folder.SortOrder = i;
-            }
+            var folder = folders.First(f => f.Id == folderIds[i]);
+            folder.SortOrder = i;
         }
 
         await _context.SaveChangesAsync();

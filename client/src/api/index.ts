@@ -55,6 +55,21 @@ export interface VersionsResponse {
   versions: NoteVersion[]
 }
 
+// Pagination types
+export interface PagedMetaData {
+  currentPage: number
+  totalPages: number
+  pageSize: number
+  totalCount: number
+  hasPrevious: boolean
+  hasNext: boolean
+}
+
+export interface PagedResponse<T> {
+  items: T[]
+  metaData: PagedMetaData
+}
+
 // Request types
 export interface LoginRequest {
   email: string
@@ -129,24 +144,23 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   response => {
-    // 统一解包 Result<T> 格式: { value, isSuccess, errors, status, message }
-    const res = response.data
-    if (res && typeof res === 'object' && 'isSuccess' in res) {
-      if (res.isSuccess) {
-        // 成功：解包 value 给前端使用
-        response.data = res.value
-      } else {
-        // 失败：抛出错误
-        const message = res.message || res.errors?.join(', ') || '请求失败'
-        return Promise.reject(new Error(message))
-      }
-    }
+    // 后端直接返回数据，无需解包
     return response
   },
   error => {
     if (error.response) {
       const { status, data } = error.response
-      const message = data?.message || data?.error?.message || '请求失败'
+      // 后端直接返回 string 或 string[] 作为错误信息
+      let message = '请求失败'
+      if (typeof data === 'string') {
+        message = data
+      } else if (Array.isArray(data)) {
+        message = data.join(', ')
+      } else if (data?.message) {
+        message = data.message
+      } else if (data?.error?.message) {
+        message = data.error.message
+      }
 
       if (status === 401) {
         clearAuthCookie()
@@ -184,6 +198,9 @@ export const authAPI = {
 export const notesAPI = {
   getNotes: (params?: Record<string, string | number | undefined>): Promise<NotesResponse> =>
     api.get('/notes', { params }).then(res => res.data),
+
+  getPageNotes: (params?: { page?: number; pageSize?: number; search?: string; folderId?: string }): Promise<PagedResponse<Note>> =>
+    api.get('/notes/page', { params }).then(res => res.data),
 
   getNote: (id: string): Promise<Note> =>
     api.get(`/notes/${id}`).then(res => res.data),

@@ -13,6 +13,7 @@ export function useSidebar() {
   const notes = ref<Note[]>([])
   const uncategorizedCount = ref(0)
   const isLoading = ref(false)
+  const saving = ref(false)
 
   // 拖拽状态
   const draggedFolder = ref<Folder | null>(null)
@@ -44,20 +45,20 @@ export function useSidebar() {
       const res = await foldersAPI.getFolders()
       folders.value = res.folders || []
       uncategorizedCount.value = res.uncategorizedCount || 0
-    } catch (error: any) {
-      ElMessage.error(error?.message || '加载分类失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '加载分类失败')
     } finally {
       isLoading.value = false
     }
   }
 
   // 加载笔记列表
-  const loadNotes = async (params: Record<string, any> = {}) => {
+  const loadNotes = async (params: Record<string, string | number | undefined> = {}) => {
     try {
       const res = await notesAPI.getNotes(params)
       notes.value = res.notes || []
-    } catch (error: any) {
-      ElMessage.error(error?.message || '加载笔记失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '加载笔记失败')
     }
   }
 
@@ -144,9 +145,8 @@ export function useSidebar() {
           await foldersAPI.reorderFolders({ folderIds })
           await loadFolders()
           ElMessage.success('排序已保存')
-        } catch (e) {
-          // 保存排序失败
-          ElMessage.error('保存排序失败')
+        } catch (error: unknown) {
+          ElMessage.error(error instanceof Error ? error.message : '保存排序失败')
           await loadFolders()
         }
         return
@@ -164,8 +164,8 @@ export function useSidebar() {
         await foldersAPI.updateFolder(dragged.id, { parentId: newParentId })
         ElMessage.success('分类移动成功')
         await loadFolders()
-      } catch (error: any) {
-        ElMessage.error(error?.message || '移动分类失败')
+      } catch (error: unknown) {
+        ElMessage.error(error instanceof Error ? error.message : '移动分类失败')
         await loadFolders()
       }
     } else {
@@ -174,8 +174,8 @@ export function useSidebar() {
         await foldersAPI.updateFolder(dragged.id, { parentId: '0' })
         ElMessage.success('分类已移至顶级')
         await loadFolders()
-      } catch (error: any) {
-        ElMessage.error(error?.message || '操作失败')
+      } catch (error: unknown) {
+        ElMessage.error(error instanceof Error ? error.message : '操作失败')
         await loadFolders()
       }
     }
@@ -183,59 +183,74 @@ export function useSidebar() {
 
   // 创建分类
   const createFolder = async (name: string, parentId: number | string | null = null) => {
+    saving.value = true
     try {
       const parentIdValue = parentId === null ? '0' : parentId
       await foldersAPI.createFolder({ name, parentId: parentIdValue })
       ElMessage.success('分类创建成功')
       await loadFolders()
-    } catch (error: any) {
-      ElMessage.error(error?.message || '创建分类失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '创建分类失败')
+    } finally {
+      saving.value = false
     }
   }
 
   // 更新分类
   const updateFolder = async (id: string, name: string, parentId: number | string | null = null) => {
+    saving.value = true
     try {
       const parentIdValue = (parentId === null || parentId === undefined) ? '0' : parentId
       await foldersAPI.updateFolder(id, { name, parentId: parentIdValue })
       ElMessage.success('分类修改成功')
       await loadFolders()
-    } catch (error: any) {
-      ElMessage.error(error?.message || '修改分类失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '修改分类失败')
+    } finally {
+      saving.value = false
     }
   }
 
   // 删除分类
   const deleteFolder = async (id: string) => {
+    saving.value = true
     try {
       await foldersAPI.deleteFolder(id)
       ElMessage.success('分类删除成功')
       await loadFolders()
-    } catch (error: any) {
-      ElMessage.error(error?.message || '删除分类失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '删除分类失败')
+    } finally {
+      saving.value = false
     }
   }
 
   // 切换置顶
   const togglePinFolder = async (id: string) => {
+    saving.value = true
     try {
       await foldersAPI.pinFolder(id)
       await loadFolders()
-    } catch (error: any) {
-      ElMessage.error(error?.message || '操作失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '操作失败')
+    } finally {
+      saving.value = false
     }
   }
 
   // 创建笔记
   const createNote = async (title: string = '无标题笔记', content: string = '', folderId?: string | number | null) => {
+    saving.value = true
     try {
       const note = await notesAPI.createNote({ title, content, folderId })
       ElMessage.success('笔记创建成功')
       await loadNotes()
       return note
-    } catch (error: any) {
-      ElMessage.error(error?.message || '创建笔记失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '创建笔记失败')
       return null
+    } finally {
+      saving.value = false
     }
   }
 
@@ -246,13 +261,16 @@ export function useSidebar() {
 
   // 删除笔记
   const deleteNote = async (id: string) => {
+    saving.value = true
     try {
       await notesAPI.deleteNote(id)
       ElMessage.success('笔记删除成功')
       await loadNotes()
       await loadFolders()
-    } catch (error: any) {
-      ElMessage.error(error?.message || '删除笔记失败')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '删除笔记失败')
+    } finally {
+      saving.value = false
     }
   }
 
@@ -286,6 +304,7 @@ export function useSidebar() {
     notes,
     uncategorizedCount,
     isLoading,
+    saving,
     draggedFolder,
     dragOverFolder,
     hoverSide,
@@ -323,6 +342,7 @@ export interface SidebarReturn {
   notes: Ref<Note[]>
   uncategorizedCount: Ref<number>
   isLoading: Ref<boolean>
+  saving: Ref<boolean>
   draggedFolder: Ref<Folder | null>
   dragOverFolder: Ref<Folder | null>
   hoverSide: Ref<'sibling' | 'child'>
@@ -333,7 +353,7 @@ export interface SidebarReturn {
   rootFolders: ComputedRef<Folder[]>
   // Actions
   loadFolders: () => Promise<void>
-  loadNotes: (params?: Record<string, any>) => Promise<void>
+  loadNotes: (params?: Record<string, string | number | undefined>) => Promise<void>
   loadAll: () => Promise<void>
   toggleExpand: (folderId: number | string) => void
   onDragStart: (event: DragEvent, folder: Folder) => void
