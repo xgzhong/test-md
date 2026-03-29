@@ -189,6 +189,98 @@ const cancelPendingRequests = () => {
   }
 }
 
+// 转换外部图片 URL 为 OSS URL
+const transformExternalImages = async (text, getToken) => {
+  const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+
+  // 收集所有需要替换的图片
+  const matches = []
+  let match
+  while ((match = mdImageRegex.exec(text)) !== null) {
+    const [fullMatch, alt, url] = match
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      matches.push({ fullMatch, alt, url, index: match.index, isMarkdown: true })
+    }
+  }
+
+  // 如果没有markdown语法，检查是否是纯图片URL
+  if (matches.length === 0) {
+    const urlMatch = text.trim().match(/^https?:\/\/.*\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i)
+    if (urlMatch) {
+      matches.push({ fullMatch: urlMatch[0], alt: '', url: urlMatch[0], index: 0, isMarkdown: false })
+    }
+  }
+
+  console.log('Found matches:', matches.length)
+  if (matches.length === 0) return text
+
+  // 逐个下载并上传
+  let result = text
+  for (const m of matches) {
+    try {
+      console.log('Downloading:', m.url)
+      // 下载图片
+      const imgResponse = await fetch(m.url)
+      if (!imgResponse.ok) {
+        console.error('Failed to download:', imgResponse.status)
+        continue
+      }
+
+      const blob = await imgResponse.blob()
+      console.log('Downloaded, size:', blob.size)
+      const fileName = m.url.split('/').pop()?.split('?')[0] || 'image.png'
+      const mimeType = blob.type || 'image/png'
+
+      // 获取预签名 URL 并上传
+      const token = getToken()
+      const presignedResponse = await fetch('/api/oss/presigned-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          fileName: fileName,
+          fileSize: blob.size,
+          contentType: mimeType,
+          noteId: note.id || 'new'
+        })
+      })
+
+      if (!presignedResponse.ok) {
+        console.error('Failed to get presigned URL:', presignedResponse.status)
+        continue
+      }
+
+      const { uploadUrl, finalUrl } = await presignedResponse.json()
+      console.log('Uploading to:', finalUrl)
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: { 'Content-Type': mimeType }
+      })
+
+      if (!uploadResponse.ok) {
+        console.error('Failed to upload:', uploadResponse.status)
+        continue
+      }
+
+      // 替换 URL
+      if (m.isMarkdown) {
+        result = result.replace(m.fullMatch, `![${m.alt}](${finalUrl})`)
+      } else {
+        result = finalUrl
+      }
+      console.log('Replaced successfully')
+    } catch (err) {
+      console.error('Failed to transform image:', m.url, err)
+    }
+  }
+
+  return result
+}
+
 // 侧边栏宽度
 const sidebarWidth = ref(380)
 const sidebarCollapsed = ref(false)
@@ -351,6 +443,161 @@ const initVditor = (content, onReady) => {
     after: () => {
       vditorLoading.value = false
       if (onReady) onReady()
+
+      // 添加原生 paste 事件监听器处理 markdown 图片链接
+      document.addEventListener('paste', async (e) => {
+        const clipboardData = e.clipboardData
+        if (!clipboardData) return
+
+        // 初始化 matches 和 resultText
+        const matches = []
+        let resultText = ''
+
+        // 尝试获取纯文本
+        const plainText = clipboardData.getData('text/plain')
+
+        // 如果没有纯文本，尝试获取 HTML
+        if (!plainText) {
+          const htmlData = clipboardData.getData('text/html')
+
+          // 从 HTML 中提取图片 URL
+          if (htmlData) {
+            // 尝试匹配 downloadUrl 或 thumbnailUrl
+            const urlMatch = htmlData.match(/"(downloadUrl|thumbnailUrl|imageUrl|sourceUrl)"\s*:\s*"([^"]+)"/)
+            if (urlMatch && urlMatch[2]?.startsWith('http')) {
+              matches.push({ fullMatch: urlMatch[2], alt: '', url: urlMatch[2], isPlainUrl: true })
+            } else {
+              // 直接匹配 http URL
+              const regex = /https?:\/\/[^\s"'<>]+/gi
+              let m
+              while ((m = regex.exec(htmlData)) !== null) {
+                const url = m[0]
+                if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url) || url.includes('thumbnail') || url.includes('storage')) {
+                  matches.push({ fullMatch: url, alt: '', url: url, isPlainUrl: true })
+                  break
+                }
+              }
+            }
+          }
+
+          if (matches.length > 0) {
+            resultText = matches[0].fullMatch
+          }
+        } else {
+          resultText = plainText
+
+          // 检查是否包含 markdown 图片语法
+          const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+          let match
+          while ((match = mdImageRegex.exec(plainText)) !== null) {
+            const url = match[2]
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              matches.push({ fullMatch: match[0], alt: match[1], url: url })
+            }
+          }
+
+          // 也检查纯 URL
+          if (matches.length === 0) {
+            const urlRegex = /https?:\/\/[^)\s"'<>]+/gi
+            const urlMatches = plainText.match(urlRegex) || []
+            for (const url of urlMatches) {
+              if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url)) {
+                matches.push({ fullMatch: url, alt: '', url: url, isPlainUrl: true })
+              }
+            }
+          }
+        }
+
+        if (matches.length === 0) {
+          return
+        }
+
+        // 有外部图片，需要处理
+        e.preventDefault()
+        ElMessage.info('正在处理粘贴的图片...')
+
+        // 下载并上传
+        const getToken = () => {
+          const cookies = document.cookie.split('; ')
+          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
+          return tokenCookie ? tokenCookie.split('=')[1] : null
+        }
+
+        let result = resultText
+        for (const m of matches) {
+          try {
+            const imgResponse = await fetch(m.url)
+            if (!imgResponse.ok) continue
+
+            const blob = await imgResponse.blob()
+            const fileName = m.url.split('/').pop()?.split('?')[0] || 'image.png'
+            const mimeType = blob.type || 'image/png'
+
+            const token = getToken()
+            const presignedResponse = await fetch('/api/oss/presigned-url', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+                fileSize: blob.size,
+                contentType: mimeType,
+                noteId: note.id || 'new'
+              })
+            })
+
+            if (!presignedResponse.ok) continue
+
+            const { uploadUrl, finalUrl } = await presignedResponse.json()
+
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'PUT',
+              body: blob,
+              headers: { 'Content-Type': mimeType }
+            })
+
+            if (!uploadResponse.ok) continue
+
+            if (m.isPlainUrl) {
+              result = finalUrl
+            } else {
+              result = result.replace(m.fullMatch, `![${m.alt}](${finalUrl})`)
+            }
+          } catch (err) {
+            console.error('Failed to transform image:', err)
+          }
+        }
+
+        // 替换编辑器内容中的原图片链接
+        if (vditor) {
+          // 获取当前编辑器内容
+          const currentContent = vditor.getValue()
+
+          // 在当前内容中查找并替换第一个匹配的外部图片 URL
+          let newContent = currentContent
+          for (const m of matches) {
+            if (currentContent.includes(m.url)) {
+              newContent = currentContent.replace(m.url, result)
+              break
+            }
+          }
+
+          // 如果找到了替换，则更新编辑器内容
+          if (newContent !== currentContent) {
+            vditor.setValue(newContent)
+            ElMessage.success('图片上传成功')
+          } else {
+            // 如果当前内容中没有这个 URL，则直接插入
+            vditor.insertValue(result)
+            ElMessage.success('图片上传成功')
+          }
+        } else {
+          console.error('Vditor instance is null')
+          ElMessage.error('编辑器未准备好')
+        }
+      }, true) // 使用捕获阶段
     },
     toolbar: [
       'headings',
@@ -390,7 +637,126 @@ const initVditor = (content, onReady) => {
     },
     upload: {
       max: 10 * 1024 * 1024,  // 10MB
-      linkToImgUrl: '/api/oss/presigned-url',
+      // 粘贴图片时自动上传到 OSS
+      paste: async (ev, files) => {
+        // 从 cookie 获取 token
+        const getToken = () => {
+          const cookies = document.cookie.split('; ')
+          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
+          return tokenCookie ? tokenCookie.split('=')[1] : null
+        }
+
+        // 1. 先处理实际图片文件
+        const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'))
+        if (imageFiles.length > 0) {
+          // 处理实际图片的上传（保持原有逻辑）
+          const file = imageFiles[0]
+          const uploadAndInsert = async (f, fName) => {
+            const token = getToken()
+            const presignedResponse = await fetch('/api/oss/presigned-url', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify({
+                fileName: fName,
+                fileSize: f.size,
+                contentType: f.type || 'image/png',
+                noteId: note.id || 'new'
+              })
+            })
+
+            if (!presignedResponse.ok) {
+              const err = await presignedResponse.json()
+              ElMessage.error(err.error || '获取上传链接失败')
+              return
+            }
+
+            const { uploadUrl, finalUrl } = await presignedResponse.json()
+
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'PUT',
+              body: f,
+              headers: { 'Content-Type': f.type || 'image/png' }
+            })
+
+            if (!uploadResponse.ok) {
+              ElMessage.error('上传到云存储失败')
+              return
+            }
+
+            const imgLink = `![${fName}](${finalUrl})`
+            vditor.insertValue(imgLink)
+            ElMessage.success('图片上传成功')
+          }
+
+          uploadAndInsert(file, file.name || 'paste_image.png')
+          return false
+        }
+
+        // 2. 处理剪贴板中的文本（可能是 URL 或 markdown 图片语法）
+        let clipboardText = ''
+        if (ev.clipboardData) {
+          const textData = ev.clipboardData.getData('text/plain')
+          if (textData) clipboardText = textData
+        }
+
+        console.log('Clipboard text:', clipboardText)
+
+        if (clipboardText) {
+          // 匹配 markdown 图片语法：![](url) 或 ![alt](url)
+          const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+          let match
+          let hasExternalImage = false
+          let imageUrl = null
+
+          // 检查是否包含外部图片URL
+          while ((match = mdImageRegex.exec(clipboardText)) !== null) {
+            const url = match[2]
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              hasExternalImage = true
+              imageUrl = match[0] // 完整markdown语法
+              console.log('Found external image URL:', url)
+              break
+            }
+          }
+
+          // 如果没有markdown语法，检查是否是纯图片URL
+          if (!hasExternalImage && clipboardText.match(/^https?:\/\/.*\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i)) {
+            hasExternalImage = true
+            imageUrl = clipboardText.trim()
+            console.log('Found raw image URL:', imageUrl)
+          }
+
+          if (!hasExternalImage) {
+            console.log('No external image found, let Vditor handle')
+            return // 没有外部图片，让 Vditor 处理
+          }
+
+          // 有外部图片，需要转换
+          ev.preventDefault() // 阻止默认粘贴
+
+          try {
+            // 下载并上传所有外部图片
+            const newText = await transformExternalImages(clipboardText, getToken)
+            console.log('Transformed text:', newText)
+
+            // 插入转换后的文本
+            vditor.insertValue(newText)
+            ElMessage.success('图片上传成功')
+          } catch (err) {
+            console.error('Upload error:', err)
+            ElMessage.error('图片上传失败')
+            // 上传失败时，插入原始文本
+            vditor.insertValue(clipboardText)
+          }
+          return false
+        }
+
+        // 如果没有图片，让 Vditor 处理默认行为
+        return false
+      },
       handler: async (files) => {
         const file = files[0]
         if (!file) return

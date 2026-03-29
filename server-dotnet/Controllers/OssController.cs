@@ -25,6 +25,108 @@ public class OssController : ControllerBase
     }
 
     /// <summary>
+    /// 转换图片 URL（用于 Vditor 粘贴 markdown 图片时自动上传到 OSS）
+    /// POST /api/oss/link-to-img
+    /// </summary>
+    [HttpPost("link-to-img")]
+    public async Task<IActionResult> LinkToImg([FromBody] LinkToImgRequest linkRequest)
+    {
+        var url = linkRequest.Url;
+        if (string.IsNullOrEmpty(url))
+        {
+            return BadRequest(new { error = "缺少 URL 参数" });
+        }
+
+        var accessKeyId = _configuration["OSS:AccessKeyId"];
+        var accessKeySecret = _configuration["OSS:AccessKeySecret"];
+        var endpoint = _configuration["OSS:Endpoint"];
+        var bucketName = _configuration["OSS:BucketName"];
+
+        if (string.IsNullOrEmpty(accessKeyId) || string.IsNullOrEmpty(accessKeySecret) ||
+            string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(bucketName))
+        {
+            return BadRequest(new { error = "OSS 未配置" });
+        }
+
+        try
+        {
+            // 下载原图
+            using var client = new HttpClient();
+            var imageBytes = await client.GetByteArrayAsync(url);
+
+            // 从 URL 推断文件类型
+            var uri = new Uri(url);
+            var fileName = Path.GetFileName(uri.LocalPath);
+            var ext = Path.GetExtension(fileName).ToLowerInvariant();
+            if (string.IsNullOrEmpty(ext)) ext = ".png";
+
+            // 生成新文件名
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var random = Random.Shared.Next(1000, 9999);
+            var newFileName = $"{timestamp}_{random}{ext}";
+            var objectName = $"uploads/temp/{newFileName}";
+
+            // 清理 endpoint
+            var cleanEndpoint = endpoint.Replace("https://", "").Replace("http://", "").TrimEnd('/');
+
+            // 上传到 OSS
+            var gmtDate = DateTime.UtcNow.ToString("ddd, dd MMM yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + " GMT";
+            var mimeType = GetMimeType(ext);
+            var resourcePath = $"/{bucketName}/{objectName}";
+
+            var stringToSign = $"PUT\n\n{mimeType}\n{gmtDate}\n{resourcePath}";
+
+            using var hmac = new HMACSHA1(Encoding.UTF8.GetBytes(accessKeySecret));
+            var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign));
+            var signature = Convert.ToBase64String(hash);
+
+            var ossUrl = $"https://{bucketName}.{cleanEndpoint}/{objectName}";
+
+            var request = WebRequest.Create(ossUrl) as HttpWebRequest;
+            request.Method = "PUT";
+            request.ContentLength = imageBytes.Length;
+            request.ContentType = mimeType;
+            request.Date = DateTime.UtcNow;
+            request.Host = $"{bucketName}.{cleanEndpoint}";
+            request.Headers.Add("Authorization", $"OSS {accessKeyId}:{signature}");
+
+            using (var requestStream = await request.GetRequestStreamAsync())
+            {
+                await requestStream.WriteAsync(imageBytes, 0, imageBytes.Length);
+            }
+
+            var response = await request.GetResponseAsync() as HttpWebResponse;
+            var statusCode = (int)response.StatusCode;
+
+            if (statusCode == 200)
+            {
+                return Ok(new { dest = ossUrl });
+            }
+
+            return BadRequest(new { error = $"上传失败 ({statusCode})" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error converting image URL: {Url}", url);
+            return BadRequest(new { error = $"转换失败: {ex.Message}" });
+        }
+    }
+
+    private static string GetMimeType(string extension)
+    {
+        return extension.ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".bmp" => "image/bmp",
+            ".svg" => "image/svg+xml",
+            _ => "application/octet-stream"
+        };
+    }
+
+    /// <summary>
     /// 获取预签名 URL（用于浏览器直传 OSS）
     /// </summary>
     [HttpPost("presigned-url")]
@@ -44,9 +146,26 @@ public class OssController : ControllerBase
         // 验证文件类型
         var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar" };
         var ext = Path.GetExtension(request.FileName).ToLowerInvariant();
-        if (!allowedExtensions.Contains(ext))
+
+        // 如果没有扩展名或扩展名不在列表中，尝试从 ContentType 推断
+        if (string.IsNullOrEmpty(ext) || !allowedExtensions.Contains(ext))
         {
-            return BadRequest(new { error = "不支持的文件类型" });
+            var contentType = request.ContentType?.ToLowerInvariant() ?? "";
+            ext = contentType switch
+            {
+                "image/png" => ".png",
+                "image/jpeg" or "image/jpg" => ".jpg",
+                "image/gif" => ".gif",
+                "image/webp" => ".webp",
+                "image/bmp" => ".bmp",
+                "image/svg+xml" => ".svg",
+                _ => ext
+            };
+
+            if (string.IsNullOrEmpty(ext) || !allowedExtensions.Contains(ext))
+            {
+                return BadRequest(new { error = "不支持的文件类型" });
+            }
         }
 
         // 验证文件大小
@@ -207,6 +326,11 @@ public class OssController : ControllerBase
             return BadRequest(new { error = $"上传失败: {ex.Message}" });
         }
     }
+}
+
+public class LinkToImgRequest
+{
+    public string Url { get; set; } = string.Empty;
 }
 
 public class PresignedUrlRequest
