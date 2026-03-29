@@ -722,10 +722,31 @@ const handleSelectFolder = async () => {
 }
 
 // 处理打开笔记
-const handleOpenNote = (noteId) => {
-  if (noteId) {
-    router.push(`/note/${noteId}`)
+const handleOpenNote = async (noteId) => {
+  if (!noteId) return
+
+  // 检查是否有未保存的更改
+  const currentHasChanges = note.title !== original.title || note.content !== original.content || ui.hasUnsavedChanges
+
+  if (currentHasChanges) {
+    try {
+      await ElMessageBox.confirm('您有未保存的更改，确定要离开吗？', '提示', {
+        confirmButtonText: '保存并离开',
+        cancelButtonText: '不保存',
+        distinguishCancelAndClose: true,
+        type: 'warning'
+      })
+      await saveNote()
+    } catch (action) {
+      if (action === 'cancel') {
+        // 用户取消，不跳转
+        return
+      }
+      // 用户选择不保存，继续跳转
+    }
   }
+
+  router.push(`/note/${noteId}`)
 }
 
 // 处理返回按钮
