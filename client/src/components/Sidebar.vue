@@ -96,14 +96,14 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import FolderTreeItem from './FolderTreeItem.vue'
 import { useSidebar } from '../composables/useSidebar'
-import type { Folder } from '../api'
+import type { Folder, Note } from '../api'
 
 const props = defineProps({
   title: { type: String, default: 'Markdown 笔记' },
   collapsed: { type: Boolean, default: false },
   width: { type: Number, default: 380 },
   folders: { type: Array, default: () => [] },
-  notes: { type: Array, default: () => [] },
+  notes: { type: Array as () => Note[], default: () => [] as Note[] },
   currentFolder: { type: [Number, String, null], default: null },
   totalNotes: { type: Number, default: undefined },
   uncategorizedCount: { type: Number, default: undefined },
@@ -139,7 +139,7 @@ watch(() => props.folders, (val) => {
 
 watch(() => props.notes, (val) => {
   if (val) {
-    sidebar.notes.value = val as any[]
+    sidebar.notes.value = val as Note[]
   }
 }, { immediate: true })
 

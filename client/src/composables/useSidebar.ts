@@ -25,12 +25,6 @@ export function useSidebar() {
   const expandedKeys = ref<Record<number | string, boolean>>({})
 
   // ============== Computed ==============
-  const isLevelChange = computed(() => {
-    if (!draggedFolder.value || !dragOverFolder.value) return false
-    const draggedPid = draggedFolder.value.parentId ? String(draggedFolder.value.parentId) : '0'
-    return draggedPid !== String(dragOverFolder.value.id)
-  })
-
   const rootFolders = computed(() => folders.value.filter(f => Number(f.parentId) === 0))
 
   // ============== Drag-Drop Helpers ==============
@@ -311,7 +305,6 @@ export function useSidebar() {
     hoverPosition,
     expandedKeys,
     // Computed
-    isLevelChange,
     rootFolders,
     // Actions
     loadFolders,
@@ -349,7 +342,6 @@ export interface SidebarReturn {
   hoverPosition: Ref<'above' | 'below'>
   expandedKeys: Ref<Record<number | string, boolean>>
   // Computed
-  isLevelChange: ComputedRef<boolean>
   rootFolders: ComputedRef<Folder[]>
   // Actions
   loadFolders: () => Promise<void>

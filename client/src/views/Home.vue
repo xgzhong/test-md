@@ -24,7 +24,6 @@
       @update:width="sidebarWidth = $event"
       @titleClick="router.push('/home')"
       @loaded="onSidebarLoaded"
-      ref="sidebarRef"
     />
 
     <!-- 主内容区 -->
@@ -161,7 +160,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const sidebar = useSidebar()
 
-const sidebarRef = ref<InstanceType<typeof Sidebar> | null>(null)
 const searchText = ref('')
 const currentFolder = ref<number | string | null>(null)
 const sidebarCollapsed = ref(false)
