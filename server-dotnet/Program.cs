@@ -62,6 +62,12 @@ if (string.IsNullOrWhiteSpace(jwtSecret))
     throw new InvalidOperationException("JWT secret must be configured via JWT_SECRET environment variable or appsettings.json");
 }
 
+// Validate JWT secret length (minimum 32 bytes for HS256)
+if (Encoding.UTF8.GetByteCount(jwtSecret) < 32)
+{
+    throw new InvalidOperationException("JWT secret must be at least 32 characters (256 bits) for HS256 algorithm");
+}
+
 // Read CORS origins from environment variable
 var corsOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS")
     ?? builder.Configuration["CORS:AllowedOrigins"]
