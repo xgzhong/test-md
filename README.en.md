@@ -2,6 +2,14 @@
 
 [中文](./README.md)
 
+[![Vue](https://img.shields.io/badge/Vue-3.3.11-green)](https://vuejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-5.0-brightgreen)](https://vitejs.dev)
+[![Element Plus](https://img.shields.io/badge/Element%20Plus-2.4.4-409eff)](https://element-plus.org)
+[![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-10.0-512bd4)](https://dotnet.microsoft.com)
+[![MySQL](https://img.shields.io/badge/MySQL-5.7+-orange)](https://www.mysql.com)
+[![MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
 A web-based Markdown note-taking application with note categorization, version history management, and sharing capabilities.
 
 ## Features
@@ -17,6 +25,7 @@ A web-based Markdown note-taking application with note categorization, version h
 - **Version History** - Manual save with restore and delete support
 - **Sharing** - Generate share links with DOMPurify HTML sanitization
 - **Work Log** - Auto-generate monthly work log templates
+- **Pagination** - Paginated note list for handling large datasets
 
 ### Category Management
 
@@ -52,68 +61,71 @@ A web-based Markdown note-taking application with note categorization, version h
 - **Auth**: JWT + BCrypt
 - **ID Generation**: Yitter.IdGenerator (Snowflake ID)
 - **Rate Limiting**: Built-in middleware
+- **Logging**: Serilog
 
 ## Project Structure
 
 ```
 test-md/
-├── client/                         # Frontend (Vue 3 + TypeScript)
+├── client/                         # Frontend project
 │   ├── src/
 │   │   ├── api/                   # API client (Axios)
-│   │   ├── components/             # Reusable components
-│   │   │   ├── Sidebar.vue         # Sidebar component
-│   │   │   └── FolderTreeItem.vue  # Folder tree component
-│   │   ├── composables/            # Composable functions
-│   │   │   ├── useSidebar.ts       # Sidebar logic
-│   │   │   └── useCommon.ts        # Common utilities
-│   │   ├── stores/                 # Pinia stores
-│   │   │   ├── auth.ts             # Auth state
-│   │   │   └── notes.ts            # Notes state
-│   │   ├── views/                  # Page components
-│   │   │   ├── Login.vue           # Login page
-│   │   │   ├── Register.vue        # Registration page
-│   │   │   ├── Home.vue            # Notes list home
+│   │   ├── components/            # Reusable components
+│   │   │   ├── Sidebar.vue        # Sidebar component
+│   │   │   └── FolderTreeItem.vue # Folder tree component
+│   │   ├── composables/           # Composable functions
+│   │   │   ├── useSidebar.ts      # Sidebar logic
+│   │   │   └── useCommon.ts       # Common utilities
+│   │   ├── stores/                # Pinia stores
+│   │   │   └── auth.ts            # Auth state
+│   │   ├── views/                 # Page components
+│   │   │   ├── Login.vue          # Login page
+│   │   │   ├── Register.vue       # Registration page
+│   │   │   ├── Home.vue           # Notes list home
 │   │   │   ├── NoteEditorVditor.vue # Markdown editor
 │   │   │   ├── FolderDetail.vue   # Folder detail page
-│   │   │   ├── About.vue           # About page
+│   │   │   ├── About.vue          # About page
 │   │   │   └── Shared.vue          # Shared note page
-│   │   ├── router/                 # Router configuration
-│   │   ├── utils/                  # Utilities
-│   │   ├── App.vue                 # Root component
-│   │   └── main.ts                 # Entry file
+│   │   ├── router/                # Router configuration
+│   │   ├── App.vue                # Root component
+│   │   ├── main.js                # Entry file
+│   │   └── style.css              # Global styles
 │   ├── index.html
 │   ├── package.json
 │   ├── tsconfig.json               # TypeScript config
 │   └── vite.config.ts             # Vite config
 │
-├── server-dotnet/                  # Backend (.NET 10.0)
+├── server-dotnet/                  # Backend project (.NET 10.0)
+│   ├── Common/                     # Shared modules
+│   │   ├── Paging/                # Pagination components
+│   │   └── Result/                # Unified response wrapper
 │   ├── Controllers/               # API Controllers
-│   │   ├── AuthController.cs       # Authentication
+│   │   ├── AuthController.cs      # Authentication
 │   │   ├── NotesController.cs      # Notes API
 │   │   ├── FoldersController.cs   # Folders API
 │   │   └── SharedController.cs    # Sharing API
-│   ├── Models/                    # Data Models
+│   ├── Models/                     # Data Models
 │   │   ├── User.cs
 │   │   ├── Note.cs
 │   │   ├── Folder.cs
 │   │   └── NoteVersion.cs
-│   ├── Data/                      # Database Context
+│   ├── Data/                       # Database Context
 │   │   └── AppDbContext.cs
-│   ├── DTOs/                      # Data Transfer Objects
-│   │   └── AuthDtos.cs
-│   ├── Middleware/                # Middleware
+│   ├── DTOs/                       # Data Transfer Objects
+│   │   └── *.cs
+│   ├── Middleware/                 # Middleware
 │   │   └── GlobalExceptionHandler.cs
-│   ├── Converters/                # JSON Converters
+│   ├── Converters/                 # JSON Converters
 │   │   ├── LongToStringConverter.cs
 │   │   └── DateTimeOffsetConverter.cs
-│   ├── Constants/                 # Application Constants
+│   ├── Constants/                  # Application Constants
 │   │   └── AppConstants.cs
-│   ├── appsettings.json           # Configuration
-│   └── Program.cs                 # Entry point
+│   ├── appsettings.json            # Configuration
+│   └── Program.cs                  # Entry point
 │
-├── README.md                      # Chinese README
-├── README-en.md                   # English README
-└── LICENSE                        # MIT License
+├── README.md                       # Chinese README
+├── README.en.md                    # English README
+└── LICENSE                         # MIT License
 ```
 
 ## Quick Start
@@ -159,6 +171,8 @@ CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 | `JWT_SECRET` | JWT secret (at least 32 chars in production) | `your-super-secret-key-at-least-32-chars` |
 | `CORS_ALLOWED_ORIGINS` | Allowed frontend origins (comma-separated) | `http://localhost:5173,https://yourdomain.com` |
 
+> On **Linux/macOS** use `export`, on **Windows** use `set` or configure in a `.env` file.
+
 3. **Backend Configuration** (`server-dotnet/appsettings.json`):
 
 ```json
@@ -191,7 +205,7 @@ pnpm dev
 # Frontend at: http://localhost:5173
 ```
 
-> Database tables are automatically created on first run.
+> Database tables are automatically created on first run (EF Core Code-First).
 
 ### Build for Production
 
@@ -204,6 +218,38 @@ pnpm build
 # Backend publish
 cd server-dotnet
 dotnet publish -c Release
+```
+
+## Deployment
+
+### Docker (Recommended)
+
+```bash
+# Build and start all services
+docker-compose up -d
+```
+
+### Nginx Reverse Proxy
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    # Frontend static files
+    location / {
+        root /var/www/test-md/client/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API reverse proxy
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
 ```
 
 ## API Endpoints
@@ -221,7 +267,8 @@ dotnet publish -c Release
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /api/notes | Get notes list (supports folderId, search params) |
+| GET | /api/notes | Get notes list (supports folderId, search, page, pageSize) |
+| GET | /api/notes/page | Paginated notes (returns items + metaData) |
 | GET | /api/notes/:id | Get note details |
 | POST | /api/notes | Create note |
 | PUT | /api/notes/:id | Update note |
@@ -231,6 +278,20 @@ dotnet publish -c Release
 | GET | /api/notes/:id/versions | Get version history |
 | POST | /api/notes/:id/restore/:versionId | Restore version |
 | DELETE | /api/notes/:id/versions/:versionId | Delete version |
+
+**Paginated Response Format**:
+
+```json
+{
+  "items": [...],
+  "metaData": {
+    "currentPage": 1,
+    "pageSize": 20,
+    "totalCount": 100,
+    "totalPages": 5
+  }
+}
+```
 
 ### Folders
 
@@ -284,7 +345,8 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 - **Rate Limiting** - Auth: 5 req/min, Notes: 60 req/sec to prevent brute force
 - **CORS** - Strict cross-origin policy configuration
 - **Soft Delete** - Notes are soft-deleted and can be recovered
-- **Request Cancellation** - Auto-cancel pending requests on route change
+- **Request Cancellation** - Auto-cancel pending requests on route change to prevent race conditions
+- **Search Injection Prevention** - LIKE query special character escaping
 
 ## Performance Optimization
 
@@ -292,6 +354,7 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 - **N+1 Query Optimization** - Use bulk update instead of loop update
 - **Pagination** - Notes list supports paginated loading
 - **Request Deduplication** - Note auto-save with debounce
+- **Stale Response Detection** - Ignore outdated responses to prevent data inconsistency
 
 ## FAQ
 
@@ -303,6 +366,9 @@ A: Make sure your browser supports HTML5 Drag and Drop API.
 
 **Q: How to customize folder icons?**
 A: Current version uses Element Plus built-in icons. Custom icons coming soon.
+
+**Q: Notes not saving?**
+A: Check network connection and backend API accessibility. You can also check the browser's network tab.
 
 ## Contributing
 

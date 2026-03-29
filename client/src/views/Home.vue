@@ -95,7 +95,7 @@
             <div class="note-meta">
               <span>{{ formatDate(note.updatedAt) }}</span>
               <el-tag v-if="note.isShared" size="small" type="success" style="margin-left: 10px;">已分享</el-tag>
-              <span v-if="getFolderName(note.folderId)" class="note-folder-name">{{ getFolderName(note.folderId) }}</span>
+              <span v-if="note.folderName" class="note-folder-name">{{ note.folderName }}</span>
             </div>
           </div>
         </div>
@@ -332,10 +332,6 @@ const updateFolderName = async () => {
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
-}
-
-const getFolderName = (folderId: number | string | null | undefined): string => {
-  return sidebar.getFolderName(folderId)
 }
 
 const logout = async () => {

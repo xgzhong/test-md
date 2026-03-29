@@ -2,6 +2,14 @@
 
 [English](./README.en.md)
 
+[![Vue](https://img.shields.io/badge/Vue-3.3.11-green)](https://vuejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-5.0-brightgreen)](https://vitejs.dev)
+[![Element Plus](https://img.shields.io/badge/Element%20Plus-2.4.4-409eff)](https://element-plus.org)
+[![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-10.0-512bd4)](https://dotnet.microsoft.com)
+[![MySQL](https://img.shields.io/badge/MySQL-5.7+-orange)](https://www.mysql.com)
+[![MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
 一个基于 Web 的 Markdown 笔记应用，支持笔记分类、历史版本管理和分享功能。
 
 ## 功能特性
@@ -15,6 +23,7 @@
 - **版本历史** - 手动保存版本，支持版本回溯和删除
 - **分享功能** - 生成分享链接，HTML 内容经 DOMPurify 净化防 XSS
 - **工作日志** - 自动生成当月工作日志模板
+- **分页浏览** - 笔记列表支持分页加载，避免大数据量卡顿
 
 ### 分类管理
 - **树形结构** - 支持多级分类（层级结构）
@@ -46,67 +55,70 @@
 - **认证**: JWT + BCrypt
 - **ID 生成**: Yitter.IdGenerator (雪花ID)
 - **速率限制**: 内置限流中间件
+- **日志**: Serilog
 
 ## 项目结构
 
 ```
 test-md/
-├── client/                         # 前端项目 (Vue 3 + TypeScript)
+├── client/                         # 前端项目
 │   ├── src/
 │   │   ├── api/                   # API 请求封装 (Axios)
-│   │   ├── components/             # 可复用组件
-│   │   │   ├── Sidebar.vue         # 侧边栏组件
-│   │   │   └── FolderTreeItem.vue  # 分类树组件
-│   │   ├── composables/            # 组合式函数
-│   │   │   ├── useSidebar.ts       # 侧边栏逻辑
-│   │   │   └── useCommon.ts        # 通用工具函数
-│   │   ├── stores/                 # Pinia 状态管理
-│   │   │   ├── auth.ts             # 认证状态
-│   │   │   └── notes.ts            # 笔记状态
-│   │   ├── views/                  # 页面组件
-│   │   │   ├── Login.vue           # 登录页面
-│   │   │   ├── Register.vue        # 注册页面
-│   │   │   ├── Home.vue            # 笔记列表主页
+│   │   ├── components/            # 可复用组件
+│   │   │   ├── Sidebar.vue        # 侧边栏组件
+│   │   │   └── FolderTreeItem.vue # 分类树组件
+│   │   ├── composables/           # 组合式函数
+│   │   │   ├── useSidebar.ts      # 侧边栏逻辑
+│   │   │   └── useCommon.ts       # 通用工具函数
+│   │   ├── stores/                # Pinia 状态管理
+│   │   │   └── auth.ts            # 认证状态
+│   │   ├── views/                 # 页面组件
+│   │   │   ├── Login.vue          # 登录页面
+│   │   │   ├── Register.vue      # 注册页面
+│   │   │   ├── Home.vue           # 笔记列表主页
 │   │   │   ├── NoteEditorVditor.vue # Markdown 编辑器
-│   │   │   ├── FolderDetail.vue    # 分类详情页
-│   │   │   ├── About.vue           # 关于页面
-│   │   │   └── Shared.vue          # 分享笔记页面
-│   │   ├── router/                 # 路由配置
-│   │   ├── utils/                  # 工具函数
-│   │   ├── App.vue                 # 根组件
-│   │   └── main.ts                 # 入口文件
+│   │   │   ├── FolderDetail.vue   # 分类详情页
+│   │   │   ├── About.vue          # 关于页面
+│   │   │   └── Shared.vue         # 分享笔记页面
+│   │   ├── router/                # 路由配置
+│   │   ├── App.vue                # 根组件
+│   │   ├── main.js                # 入口文件
+│   │   └── style.css              # 全局样式
 │   ├── index.html
 │   ├── package.json
-│   ├── tsconfig.json               # TypeScript 配置
-│   └── vite.config.ts             # Vite 配置
+│   ├── tsconfig.json              # TypeScript 配置
+│   └── vite.config.ts            # Vite 配置
 │
-├── server-dotnet/                  # 后端项目 (.NET 10.0)
+├── server-dotnet/                 # 后端项目 (.NET 10.0)
+│   ├── Common/                    # 公共模块
+│   │   ├── Paging/                # 分页组件
+│   │   └── Result/                # 统一响应封装
 │   ├── Controllers/               # API 控制器
-│   │   ├── AuthController.cs       # 认证接口
-│   │   ├── NotesController.cs      # 笔记接口
-│   │   ├── FoldersController.cs    # 分类接口
-│   │   └── SharedController.cs     # 分享接口
-│   ├── Models/                     # 数据模型
+│   │   ├── AuthController.cs      # 认证接口
+│   │   ├── NotesController.cs     # 笔记接口
+│   │   ├── FoldersController.cs   # 分类接口
+│   │   └── SharedController.cs   # 分享接口
+│   ├── Models/                    # 数据模型
 │   │   ├── User.cs
 │   │   ├── Note.cs
 │   │   ├── Folder.cs
 │   │   └── NoteVersion.cs
-│   ├── Data/                       # 数据库上下文
+│   ├── Data/                      # 数据库上下文
 │   │   └── AppDbContext.cs
 │   ├── DTOs/                      # 数据传输对象
-│   │   └── AuthDtos.cs
-│   ├── Middleware/                 # 中间件
+│   │   └── *.cs
+│   ├── Middleware/                # 中间件
 │   │   └── GlobalExceptionHandler.cs
-│   ├── Converters/                 # JSON 转换器
+│   ├── Converters/                # JSON 转换器
 │   │   ├── LongToStringConverter.cs
 │   │   └── DateTimeOffsetConverter.cs
 │   ├── Constants/                  # 常量配置
 │   │   └── AppConstants.cs
-│   ├── appsettings.json            # 配置文件
-│   └── Program.cs                  # 入口文件
+│   ├── appsettings.json           # 配置文件
+│   └── Program.cs                 # 入口文件
 │
 ├── README.md                       # 中文版 README
-├── README-en.md                    # 英文版 README
+├── README.en.md                    # 英文版 README
 └── LICENSE                        # MIT 许可证
 ```
 
@@ -153,6 +165,8 @@ CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 | `JWT_SECRET` | JWT 密钥 (生产环境至少 32 字符) | `your-super-secret-key-at-least-32-chars` |
 | `CORS_ALLOWED_ORIGINS` | 允许的前端地址 (多个逗号分隔) | `http://localhost:5173,https://yourdomain.com` |
 
+> **Linux/macOS** 使用 `export` 赋值，**Windows** 可使用 `set` 或在 `.env` 文件中配置。
+
 3. **后端配置** (`server-dotnet/appsettings.json`):
 
 ```json
@@ -185,7 +199,7 @@ pnpm dev
 # 前端地址: http://localhost:5173
 ```
 
-> 首次运行时会自动创建数据库表结构。
+> 首次运行时会自动创建数据库表结构（EF Core Code-First）。
 
 ### 构建生产版本
 
@@ -198,6 +212,38 @@ pnpm build
 # 后端发布
 cd server-dotnet
 dotnet publish -c Release
+```
+
+## 部署说明
+
+### Docker 部署（推荐）
+
+```bash
+# 构建并启动所有服务
+docker-compose up -d
+```
+
+### Nginx 反向代理配置
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    # 前端静态文件
+    location / {
+        root /var/www/test-md/client/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API 反向代理
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
 ```
 
 ## API 接口
@@ -215,7 +261,8 @@ dotnet publish -c Release
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | /api/notes | 获取笔记列表 (支持 folderId, search 参数) |
+| GET | /api/notes | 获取笔记列表 (支持 folderId, search, page, pageSize) |
+| GET | /api/notes/page | 分页获取笔记 (返回 items + metaData) |
 | GET | /api/notes/:id | 获取笔记详情 |
 | POST | /api/notes | 创建笔记 |
 | PUT | /api/notes/:id | 更新笔记 |
@@ -225,6 +272,20 @@ dotnet publish -c Release
 | GET | /api/notes/:id/versions | 获取版本历史 |
 | POST | /api/notes/:id/restore/:versionId | 恢复版本 |
 | DELETE | /api/notes/:id/versions/:versionId | 删除版本 |
+
+**分页响应格式**:
+
+```json
+{
+  "items": [...],
+  "metaData": {
+    "currentPage": 1,
+    "pageSize": 20,
+    "totalCount": 100,
+    "totalPages": 5
+  }
+}
+```
 
 ### 分类接口
 
@@ -278,7 +339,8 @@ dotnet publish -c Release
 - **速率限制** - 认证接口 5 次/分钟，笔记接口 60 次/秒，防止暴力破解和接口滥用
 - **CORS** - 严格配置跨域访问策略
 - **软删除** - 笔记删除采用软删除策略，可恢复
-- **请求取消** - 路由切换时自动取消 pending 请求
+- **请求取消** - 路由切换时自动取消 pending 请求，防止竞态条件
+- **搜索防注入** - LIKE 查询特殊字符转义
 
 ## 性能优化
 
@@ -286,6 +348,7 @@ dotnet publish -c Release
 - **N+1 查询优化** - 使用批量更新替代循环更新
 - **分页查询** - 笔记列表支持分页加载
 - **请求去重** - 笔记自动保存防抖处理
+- **响应时效检测** - 忽略过时响应，防止数据错乱
 
 ## 常见问题
 
@@ -297,6 +360,9 @@ A: 检查浏览器是否支持 HTML5 Drag and Drop API。
 
 **Q: 如何自定义分类的图标？**
 A: 目前版本使用 Element Plus 内置图标，后续版本将支持自定义。
+
+**Q: 笔记内容无法保存？**
+A: 检查网络连接，确认后端 API 可访问。也可以查看浏览器控制台的网络请求面板。
 
 ## 贡献
 
