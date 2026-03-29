@@ -20,12 +20,19 @@ export const formatDate = (dateStr: string | null | undefined): string => {
 
 /**
  * Escape HTML to prevent XSS when displaying plain text
+ * Optimized: uses string replacement instead of creating DOM elements
  */
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+}
+
 export const escapeHtml = (str: string | null | undefined): string => {
   if (!str) return ''
-  const div = document.createElement('div')
-  div.textContent = str
-  return div.innerHTML
+  return str.replace(/[&<>"']/g, char => HTML_ESCAPE_MAP[char])
 }
 
 /**

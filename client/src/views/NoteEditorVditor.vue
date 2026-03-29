@@ -314,10 +314,12 @@ const renderVersionContent = computed(() => {
 // 重试机制
 const withRetry = async (fn, retries = 3, delay = 1000, signal) => {
   for (let i = 0; i < retries; i++) {
+    // 每次重试前检查是否已取消
+    if (signal?.aborted) throw new Error('cancelled')
     try {
       return await fn()
     } catch (error) {
-      if (signal && signal.aborted) throw new Error('cancelled')
+      if (signal?.aborted) throw new Error('cancelled')
       if (i === retries - 1) throw error
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1)))
     }

@@ -11,7 +11,6 @@
       :uncategorizedCount="uncategorizedCount"
       :draggedFolder="draggedFolder"
       :dragOverFolder="dragOverFolder"
-      :isLevelChange="isLevelChange"
       :hoverSide="hoverSide"
       :hoverPosition="hoverPosition"
       @toggle="toggleSidebar"
@@ -244,12 +243,6 @@ const draggedFolder = ref(null)
 const dragOverFolder = ref(null)
 const hoverSide = ref('child')
 const hoverPosition = ref('below')
-
-const isLevelChange = computed(() => {
-  if (!draggedFolder.value || !dragOverFolder.value) return false
-  const draggedPid = draggedFolder.value.parentId ? String(draggedFolder.value.parentId) : '0'
-  return draggedPid !== String(dragOverFolder.value.id)
-})
 
 const showAddChildDialog = ref(false)
 const newChildFolderName = ref('')
