@@ -104,7 +104,7 @@
         v-for="note in folderNotes"
         :key="note.id"
         class="note-item"
-        :class="{ active: String(currentNoteId) === String(note.id) }"
+        :class="{ active: String(currentContextId) === String(note.id) }"
         :style="{ paddingLeft: (level * 20 + 36) + 'px' }"
         @click.stop="$emit('openNote', note.id)"
       >
@@ -184,8 +184,8 @@ const folderNotes = computed(() => {
   return props.notesByFolderId.get(fid) || []
 })
 
-// 当前选中的笔记ID
-const currentNoteId = computed(() => {
+// 当前选中的上下文ID（可能是文件夹ID或笔记ID，用于高亮）
+const currentContextId = computed(() => {
   return props.currentFolder
 })
 

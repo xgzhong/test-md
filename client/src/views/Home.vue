@@ -177,6 +177,7 @@ const showFolderDialog = ref(false)
 const showEditFolderDialog = ref(false)
 const editFolderForm = ref({ id: null as string | null, name: '', parentId: null as string | null })
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+let lastSearchTime = 0  // 用于忽略过时的响应
 
 const totalPages = computed(() => pageMeta.value?.totalPages ?? 0)
 const totalNotesForSidebar = computed(() => typeof totalCount.value === 'number' ? totalCount.value : Number(totalCount.value) || 0)
@@ -186,6 +187,9 @@ const onSidebarLoaded = async () => {
 }
 
 const loadNotes = async () => {
+  const thisSearchTime = Date.now()
+  lastSearchTime = thisSearchTime
+
   const params: Record<string, string | number | undefined> = {
     page: currentPage.value,
     pageSize: pageSize.value
@@ -200,11 +204,14 @@ const loadNotes = async () => {
   }
   try {
     const res = await notesAPI.getPageNotes(params)
+    // Ignore stale responses
+    if (thisSearchTime !== lastSearchTime) return
     notes.value = res.items || []
     const tc = res.metaData?.totalCount
     totalCount.value = typeof tc === 'number' ? tc : (typeof tc === 'string' ? parseInt(tc, 10) : 0)
     pageMeta.value = res.metaData || null
   } catch (error: unknown) {
+    if (thisSearchTime !== lastSearchTime) return
     ElMessage.error(error instanceof Error ? error.message : '加载笔记失败')
   }
 }
@@ -218,6 +225,7 @@ const selectFolder = (folderId: number | string | null) => {
     router.push(`/folder/${folderId}`)
     return
   }
+  searchText.value = ''  // 切换文件夹时清空搜索
   currentPage.value = 1 // 切换文件夹时重置页码
   loadNotes()
 }
@@ -262,7 +270,7 @@ const createWorkLog = async () => {
     const weekDay = weekDays[date.getDay()]
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     content += `${dateStr} ${weekDay}\n`
-    content += '- 计划1：\n- 记录1：\n- 记录2：\n\n  \n\n'
+    content += '- 计划1：\n- 记录1：\n- 记录2：\n\n'
   }
 
   const note = await sidebar.createNote(`${year}年${String(month).padStart(2, '0')}月工作日志`, content)

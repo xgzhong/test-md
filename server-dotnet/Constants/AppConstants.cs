@@ -23,7 +23,7 @@ public static class AppConstants
     public const int AuthRateLimitWindowMinutes = 1;
     public const int NotesRateLimitPermitCount = 60;
     public const int NotesRateLimitWindowSeconds = 60;
-    public const int SharedRateLimitPermitCount = 600;  // 公开接口，较宽松
+    public const int SharedRateLimitPermitCount = 60;  // 公开接口，防止暴力枚举
     public const int SharedRateLimitWindowMinutes = 1;
 
     // Auto-save

@@ -226,7 +226,8 @@ const ui = reactive({
   showSavedTip: false,
   hasUnsavedChanges: false,
   shareUrl: '',
-  selectedVersion: null
+  selectedVersion: null,
+  editorError: null
 })
 
 // 原始数据（用于比较变化）
@@ -246,6 +247,7 @@ let savedTipTimer = null
 let inputTimer = null
 let isMounted = true
 let currentNoteId = null
+let loadNoteRequestId = 0  // 用于追踪请求，防止响应乱序
 
 const wordCount = computed(() => {
   const text = note.content.replace(/[#*`\[\]()]/g, '').trim()
@@ -328,12 +330,14 @@ const withRetry = async (fn, retries = 3, delay = 1000, signal) => {
 
 const initVditor = (content, onReady) => {
   vditorLoading.value = true
+  ui.editorError = null
   if (vditor) {
     vditor.destroy()
     vditor = null
   }
 
-  vditor = new Vditor('vditor', {
+  try {
+    vditor = new Vditor('vditor', {
     value: content || '',
     mode: 'ir',
     placeholder: '在这里使用 Markdown 编写笔记...',
@@ -388,6 +392,11 @@ const initVditor = (content, onReady) => {
       handleBlur()
     }
   })
+  } catch (error) {
+    vditorLoading.value = false
+    ui.editorError = error instanceof Error ? error.message : '编辑器初始化失败'
+    ElMessage.error('编辑器初始化失败')
+  }
 }
 
 const updateVditor = (content) => {
@@ -399,11 +408,12 @@ const updateVditor = (content) => {
 const loadNote = async () => {
   cancelPendingRequests()
   abortController = new AbortController()
+  const thisRequestId = ++loadNoteRequestId
 
   try {
     const noteData = await withRetry(() => notesAPI.getNote(note.id), 3, 1000, abortController.signal)
     // Ignore if route changed while request was in flight
-    if (String(currentNoteId) !== String(note.id)) return
+    if (thisRequestId !== loadNoteRequestId) return
 
     // Store the content in a local variable first
     const content = noteData.content || ''
@@ -868,6 +878,7 @@ watch(() => route.params.id, (newId) => {
     note.id = newId
     // 检查是否是新创建的笔记
     note.isNew = route.query.new === 'true'
+    ++loadNoteRequestId  // 标记新请求
     loadNote()
     loadVersions()
   }
@@ -968,11 +979,6 @@ onBeforeUnmount(() => {
   font-size: 18px;
   font-weight: bold;
   width: 350px;
-}
-
-.header-right {
-  display: flex;
-  gap: 10px;
 }
 
 .folder-select {

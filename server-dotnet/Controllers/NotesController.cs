@@ -212,13 +212,25 @@ public class NotesController : BaseController
         var userId = GetUserId();
         if (userId == null) return ReturnResult(Result.Unauthorized());
 
+        // Validate folder ownership if folderId is provided
+        long? folderId = null;
+        if (request.FolderId != null && long.TryParse(request.FolderId, out var fid))
+        {
+            var folder = await _context.Folders.FindAsync(fid);
+            if (folder == null || folder.UserId != userId)
+            {
+                return ReturnResult(Result.Invalid("分类不存在或无权限"));
+            }
+            folderId = fid;
+        }
+
         var note = new server_dotnet.Models.Note
         {
             Id = YitIdHelper.NextId(),
             UserId = userId.Value,
             Title = request.Title ?? "无标题笔记",
             Content = request.Content ?? "",
-            FolderId = request.FolderId,
+            FolderId = folderId,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             CreatedBy = userId.Value,

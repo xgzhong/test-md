@@ -160,9 +160,9 @@ watch(() => props.uncategorizedCount, (val) => {
   }
 }, { immediate: true })
 
-// 自动加载数据
+// 自动加载数据（仅在没有外部传入 folders/notes 时）
 onMounted(async () => {
-  if (props.autoLoad) {
+  if (props.autoLoad && (!props.folders || props.folders.length === 0)) {
     await sidebar.loadAll()
     emit('loaded', { folders: sidebar.folders.value, notes: sidebar.notes.value })
   }
