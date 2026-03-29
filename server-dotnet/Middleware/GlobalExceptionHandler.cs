@@ -27,18 +27,44 @@ public class GlobalExceptionHandler
         }
     }
 
-    private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         context.Response.ContentType = "application/json";
 
-        var (statusCode, code, message) = exception switch
+        string code;
+        string message;
+        HttpStatusCode statusCode;
+
+        switch (exception)
         {
-            ArgumentException argEx => (HttpStatusCode.BadRequest, "VALIDATION_ERROR", argEx.Message),
-            KeyNotFoundException notFoundEx => (HttpStatusCode.NotFound, "NOT_FOUND", notFoundEx.Message),
-            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "UNAUTHORIZED", "未授权"),
-            Microsoft.EntityFrameworkCore.DbUpdateException => (HttpStatusCode.BadRequest, "DATABASE_ERROR", "数据库操作失败"),
-            _ => (HttpStatusCode.InternalServerError, "INTERNAL_ERROR", "服务器内部错误")
-        };
+            case ArgumentException argEx:
+                statusCode = HttpStatusCode.BadRequest;
+                code = "VALIDATION_ERROR";
+                message = argEx.Message;
+                break;
+            case KeyNotFoundException notFoundEx:
+                statusCode = HttpStatusCode.NotFound;
+                code = "NOT_FOUND";
+                message = notFoundEx.Message;
+                break;
+            case UnauthorizedAccessException:
+                statusCode = HttpStatusCode.Unauthorized;
+                code = "UNAUTHORIZED";
+                message = "未授权";
+                break;
+            case Microsoft.EntityFrameworkCore.DbUpdateException dbEx:
+                statusCode = HttpStatusCode.BadRequest;
+                code = "DATABASE_ERROR";
+                message = "数据库操作失败";
+                // 记录详细错误信息用于调试
+                _logger.LogError(dbEx, "Database error: {InnerMessage}", dbEx.InnerException?.Message ?? "No inner exception");
+                break;
+            default:
+                statusCode = HttpStatusCode.InternalServerError;
+                code = "INTERNAL_ERROR";
+                message = "服务器内部错误";
+                break;
+        }
 
         context.Response.StatusCode = (int)statusCode;
 

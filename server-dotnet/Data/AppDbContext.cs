@@ -71,7 +71,7 @@ public class AppDbContext : DbContext
             // 性能优化：添加索引
             entity.HasIndex(nv => nv.NoteId);
             entity.HasIndex(nv => new { nv.NoteId, nv.Version });
-            entity.HasIndex(nv => new { nv.NoteId, nv.CreatedAt }); // 版本查询排序优化
+            entity.HasIndex(nv => new { nv.NoteId, nv.IsDeleted, nv.CreatedAt }); // CleanupOldVersionsAsync 查询优化
         });
     }
 }

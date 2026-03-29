@@ -55,7 +55,7 @@ const renderedContent = computed(() => {
     ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote',
                    'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
                    'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-    ALLOWED_ATTR: ['href', 'alt', 'title', 'class']
+    ALLOWED_ATTR: ['href', 'alt', 'title', 'class', 'src']
   })
 })
 

@@ -38,10 +38,48 @@ public class NotesController : BaseController
         if (userId == null) return ReturnResult(Result.Unauthorized());
 
         // Validate pagination parameters
-        if (page < 1) page = 1;
-        if (pageSize < 1) pageSize = 15;
-        if (pageSize > 100) pageSize = 100;
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize < 1 ? 15 : pageSize, 1, 100);
 
+        var (notes, totalCount) = await QueryNotesAsync(userId.Value, folderId, search, page, pageSize);
+
+        var pagination = new Pagination { CurrentPage = page, PageSize = pageSize };
+        var pagedList = new PagedList<NoteDto>(notes, totalCount, pagination);
+        var response = new PagedResponse<NoteDto>
+        {
+            Items = notes,
+            MetaData = pagedList.MetaData
+        };
+
+        return ReturnResult(Result.Success(response, "获取成功"));
+    }
+
+
+    [HttpGet]
+    public async Task<IActionResult> GetNotes(
+        [FromQuery] string? folderId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100)
+    {
+        var userId = GetUserId();
+        if (userId == null) return ReturnResult(Result.Unauthorized());
+
+        // 验证分页参数
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize < 1 ? 100 : pageSize, 1, 500);
+
+        var (notes, totalCount) = await QueryNotesAsync(userId.Value, folderId, search, page, pageSize);
+
+        return ReturnResult(Result.Success(new NotesResponse(notes, totalCount), "获取成功"));
+    }
+
+    /// <summary>
+    /// 统一的笔记查询逻辑
+    /// </summary>
+    private async Task<(List<NoteDto> Notes, int TotalCount)> QueryNotesAsync(
+        long userId, string? folderId, string? search, int page, int pageSize)
+    {
         var query = _context.Notes
             .Where(n => n.UserId == userId && !n.IsDeleted)
             .Include(n => n.Folder)
@@ -66,10 +104,8 @@ public class NotesController : BaseController
             query = query.Where(n => n.Title.Contains(escapedSearch) || n.Content.Contains(escapedSearch));
         }
 
-        // 获取总数
         var totalCount = await query.CountAsync();
 
-        // 获取分页数据
         var notes = await query
             .OrderByDescending(n => n.UpdatedAt)
             .Skip((page - 1) * pageSize)
@@ -88,92 +124,7 @@ public class NotesController : BaseController
             ))
             .ToListAsync();
 
-        // 构建分页响应
-        var pagination = new Pagination { CurrentPage = page, PageSize = pageSize };
-        var pagedList = new PagedList<NoteDto>(notes, totalCount, pagination);
-        var response = new PagedResponse<NoteDto>
-        {
-            Items = notes,
-            MetaData = pagedList.MetaData
-        };
-
-        return ReturnResult(Result.Success(response, "获取成功"));
-    }
-    
-
-    [HttpGet]
-    public async Task<IActionResult> GetNotes(
-        [FromQuery] string? folderId,
-        [FromQuery] string? search,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 100)
-    {
-        var userId = GetUserId();
-        if (userId == null) return ReturnResult(Result.Unauthorized());
-
-        // 验证分页参数
-        if (page < 1) page = 1;
-        if (pageSize < 1) pageSize = 100;
-        if (pageSize > 500) pageSize = 500;
-
-        // 处理 folderId 字符串参数
-        long? parsedFolderId = null;
-        if (!string.IsNullOrEmpty(folderId))
-        {
-            if (folderId == "null")
-            {
-                parsedFolderId = null; // 未分类
-            }
-            else if (long.TryParse(folderId, out long fid))
-            {
-                parsedFolderId = fid;
-            }
-        }
-
-        var query = _context.Notes
-            .Where(n => n.UserId == userId && !n.IsDeleted)
-            .Include(n => n.Folder)
-            .AsQueryable();
-
-        if (parsedFolderId.HasValue)
-        {
-            query = query.Where(n => n.FolderId == parsedFolderId);
-        }
-        else if (folderId == "null")
-        {
-            // 显示未分类笔记（FolderId 为 null）
-            query = query.Where(n => n.FolderId == null);
-        }
-
-        if (!string.IsNullOrEmpty(search) && search.Length <= 100)
-        {
-            var escapedSearch = EscapeForLike(search);
-            query = query.Where(n => n.Title.Contains(escapedSearch) || n.Content.Contains(escapedSearch));
-        }
-
-        // 获取总数
-        var totalCount = await query.CountAsync();
-
-        // 分页查询
-        var notes = await query
-            .OrderByDescending(n => n.UpdatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(n => new NoteDto(
-                n.Id,
-                n.FolderId,
-                n.Folder != null ? n.Folder.Name : null,
-                n.Title,
-                n.Content,
-                n.IsShared,
-                n.ShareToken,
-                n.Version,
-                n.CreatedAt,
-                n.UpdatedAt
-            ))
-            .ToListAsync();
-
-        return ReturnResult(Result.Success(new NotesResponse(notes, totalCount), "获取成功"));
+        return (notes, totalCount);
     }
 
     [HttpGet("{id}")]
@@ -214,7 +165,7 @@ public class NotesController : BaseController
 
         // Validate folder ownership if folderId is provided
         long? folderId = null;
-        if (request.FolderId != null && long.TryParse(request.FolderId, out var fid))
+        if (!string.IsNullOrEmpty(request.FolderId) && request.FolderId != "null" && long.TryParse(request.FolderId, out var fid))
         {
             var folder = await _context.Folders.FindAsync(fid);
             if (folder == null || folder.UserId != userId)

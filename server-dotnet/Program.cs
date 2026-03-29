@@ -53,11 +53,11 @@ if (string.IsNullOrWhiteSpace(connectionString) || connectionString.StartsWith("
 
 // Read JWT secret from environment variable (must be at least 256 bits / 32 bytes for HS256)
 var jwtSecretEnv = Environment.GetEnvironmentVariable("JWT_SECRET");
-var jwtSecret = !string.IsNullOrWhiteSpace(jwtSecretEnv) ? jwtSecretEnv
+var jwtSecret = !string.IsNullOrEmpty(jwtSecretEnv) ? jwtSecretEnv
     : (builder.Configuration["Jwt:Secret"] is { } jwtConfig && !jwtConfig.StartsWith("${") ? jwtConfig
     : null);
 
-if (string.IsNullOrWhiteSpace(jwtSecret))
+if (string.IsNullOrEmpty(jwtSecret))
 {
     throw new InvalidOperationException("JWT secret must be configured via JWT_SECRET environment variable or appsettings.json");
 }

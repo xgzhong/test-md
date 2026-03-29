@@ -206,7 +206,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Delete, Folder, User, SwitchButton, InfoFilled } from '@element-plus/icons-vue'
@@ -237,6 +237,19 @@ const pageSize = ref(15)
 const totalCount = ref(0)
 const pageMeta = ref(null)
 const totalPages = computed(() => pageMeta.value?.totalPages ?? 0)
+
+// 请求取消控制器
+let abortController = null
+const cancelPendingRequests = () => {
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
+}
+
+onUnmounted(() => {
+  cancelPendingRequests()
+})
 
 // 拖拽状态
 const draggedFolder = ref(null)
@@ -273,13 +286,17 @@ const childFolders = computed(() => {
 })
 
 const loadFolders = async () => {
+  cancelPendingRequests()
+  abortController = new AbortController()
   try {
     const res = await foldersAPI.getFolders()
     folders.value = res.folders
     uncategorizedCount.value = res.uncategorizedCount
     loadAllNotesForSidebar()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '操作失败')
+    if (error.name !== 'CanceledError') {
+      ElMessage.error(error instanceof Error ? error.message : '操作失败')
+    }
   }
 }
 
@@ -288,11 +305,15 @@ const loadAllNotesForSidebar = async () => {
     const res = await notesAPI.getNotes({})
     sidebarNotes.value = res.notes || []
   } catch (error) {
-    console.error('加载笔记失败:', error)
+    if (error.name !== 'CanceledError') {
+      console.error('加载笔记失败:', error)
+    }
   }
 }
 
 const loadFolderDetail = async () => {
+  cancelPendingRequests()
+  abortController = new AbortController()
   try {
     const folderId = route.params.id
     currentFolder.value = folderId
@@ -330,7 +351,9 @@ const loadFolderDetail = async () => {
     totalCount.value = typeof tc === 'number' ? tc : (typeof tc === 'string' ? parseInt(tc, 10) : 0)
     pageMeta.value = res.metaData || null
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '操作失败')
+    if (error.name !== 'CanceledError') {
+      ElMessage.error(error instanceof Error ? error.message : '操作失败')
+    }
   }
 }
 

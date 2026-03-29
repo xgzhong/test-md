@@ -55,7 +55,7 @@
           >
             <el-option label="未分类" value="" />
             <el-option
-              v-for="folder in folders"
+              v-for="folder in flattenedFolders"
               :key="folder.id"
               :label="folder.name"
               :value="folder.id"
@@ -168,6 +168,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { notesAPI, foldersAPI } from '../api'
 import Sidebar from '../components/Sidebar.vue'
+import { flattenFolders } from '../composables/useCommon'
 import packageJson from '../../package.json'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
@@ -238,6 +239,10 @@ const original = reactive({
 
 // 分类列表
 const folders = ref([])
+
+// 扁平化的分类列表（用于选择器，显示所有分类包括子分类）
+const flattenedFolders = computed(() => flattenFolders(folders.value))
+
 const noteVersions = ref([])
 const currentFolder = ref(null)
 
