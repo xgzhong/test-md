@@ -186,38 +186,50 @@ public class FoldersController : BaseController
             return ReturnResult(Result.NotFound("分类不存在"));
         }
 
-        // 优化：一次性获取所有文件夹，避免递归 N+1 查询
-        var allFolders = await _context.Folders.Where(f => f.UserId == userId).ToListAsync();
-        var foldersToDelete = new List<server_dotnet.Models.Folder> { folder };
-
-        // 递归收集所有子文件夹（内存中处理）
-        void CollectChildren(long parentId)
+        // 使用事务确保原子性
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            var children = allFolders.Where(f => f.ParentId == parentId).ToList();
-            foreach (var child in children)
+            // 优化：一次性获取所有文件夹，避免递归 N+1 查询
+            var allFolders = await _context.Folders.Where(f => f.UserId == userId).ToListAsync();
+            var foldersToDelete = new List<server_dotnet.Models.Folder> { folder };
+
+            // 递归收集所有子文件夹（内存中处理）
+            void CollectChildren(long parentId)
             {
-                foldersToDelete.Add(child);
-                CollectChildren(child.Id);
+                var children = allFolders.Where(f => f.ParentId == parentId).ToList();
+                foreach (var child in children)
+                {
+                    foldersToDelete.Add(child);
+                    CollectChildren(child.Id);
+                }
             }
+
+            CollectChildren(folder.Id);
+
+            var folderIdsToDelete = foldersToDelete.Select(f => f.Id).ToHashSet();
+
+            // Move notes to uncategorized
+            var notes = await _context.Notes
+                .Where(n => n.FolderId != null && folderIdsToDelete.Contains(n.FolderId.Value))
+                .ToListAsync();
+            foreach (var note in notes)
+            {
+                note.FolderId = null;
+            }
+
+            _context.Folders.RemoveRange(foldersToDelete);
+            await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return ReturnResult(Result.Success("分类删除成功"));
         }
-
-        CollectChildren(folder.Id);
-
-        var folderIdsToDelete = foldersToDelete.Select(f => f.Id).ToHashSet();
-
-        // Move notes to uncategorized
-        var notes = await _context.Notes
-            .Where(n => n.FolderId != null && folderIdsToDelete.Contains(n.FolderId.Value))
-            .ToListAsync();
-        foreach (var note in notes)
+        catch
         {
-            note.FolderId = null;
+            await transaction.RollbackAsync();
+            throw;
         }
-
-        _context.Folders.RemoveRange(foldersToDelete);
-        await _context.SaveChangesAsync();
-
-        return ReturnResult(Result.Success("分类删除成功"));
     }
 
     [HttpPut("reorder")]

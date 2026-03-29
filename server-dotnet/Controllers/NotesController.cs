@@ -101,10 +101,19 @@ public class NotesController : BaseController
     
 
     [HttpGet]
-    public async Task<IActionResult> GetNotes([FromQuery] string? folderId, [FromQuery] string? search)
+    public async Task<IActionResult> GetNotes(
+        [FromQuery] string? folderId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100)
     {
         var userId = GetUserId();
         if (userId == null) return ReturnResult(Result.Unauthorized());
+
+        // 验证分页参数
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 100;
+        if (pageSize > 500) pageSize = 500;
 
         // 处理 folderId 字符串参数
         long? parsedFolderId = null;
@@ -140,11 +149,14 @@ public class NotesController : BaseController
             query = query.Where(n => n.Title.Contains(search) || n.Content.Contains(search));
         }
 
-        // 优化：一次查询获取笔记和总数
+        // 获取总数
         var totalCount = await query.CountAsync();
 
+        // 分页查询
         var notes = await query
             .OrderByDescending(n => n.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(n => new NoteDto(
                 n.Id,
                 n.FolderId,

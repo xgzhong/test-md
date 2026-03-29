@@ -153,8 +153,8 @@ builder.Services.AddRateLimiter(options =>
         RateLimitPartition.GetFixedWindowLimiter("shared", _ =>
             new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 60,
-                Window = TimeSpan.FromMinutes(1)
+                PermitLimit = AppConstants.SharedRateLimitPermitCount,
+                Window = TimeSpan.FromMinutes(AppConstants.SharedRateLimitWindowMinutes)
             }));
     options.AddPolicy("notes", context =>
         RateLimitPartition.GetFixedWindowLimiter("notes", _ =>
