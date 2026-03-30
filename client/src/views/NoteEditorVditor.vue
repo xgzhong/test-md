@@ -211,14 +211,12 @@ const transformExternalImages = async (text, getToken) => {
     }
   }
 
-  console.log('Found matches:', matches.length)
   if (matches.length === 0) return text
 
   // 逐个下载并上传
   let result = text
   for (const m of matches) {
     try {
-      console.log('Downloading:', m.url)
       // 下载图片
       const imgResponse = await fetch(m.url)
       if (!imgResponse.ok) {
@@ -227,7 +225,6 @@ const transformExternalImages = async (text, getToken) => {
       }
 
       const blob = await imgResponse.blob()
-      console.log('Downloaded, size:', blob.size)
       const fileName = m.url.split('/').pop()?.split('?')[0] || 'image.png'
       const mimeType = blob.type || 'image/png'
 
@@ -253,7 +250,6 @@ const transformExternalImages = async (text, getToken) => {
       }
 
       const { uploadUrl, finalUrl } = await presignedResponse.json()
-      console.log('Uploading to:', finalUrl)
 
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
@@ -272,7 +268,6 @@ const transformExternalImages = async (text, getToken) => {
       } else {
         result = finalUrl
       }
-      console.log('Replaced successfully')
     } catch (err) {
       console.error('Failed to transform image:', m.url, err)
     }
@@ -439,6 +434,8 @@ const initVditor = (content, onReady) => {
     mode: 'ir',
     placeholder: '在这里使用 Markdown 编写笔记...',
     lang: 'zh_CN',
+    i18n: window.VditorI18n,
+    cdn: 'https://cdn.jsdelivr.net/npm/vditor@3.11.2',
     tip: false,
     after: () => {
       vditorLoading.value = false
@@ -587,6 +584,8 @@ const initVditor = (content, onReady) => {
           // 如果找到了替换，则更新编辑器内容
           if (newContent !== currentContent) {
             vditor.setValue(newContent)
+            note.content = newContent
+            handleInput()
             ElMessage.success('图片上传成功')
           } else {
             // 如果当前内容中没有这个 URL，则直接插入
@@ -594,8 +593,8 @@ const initVditor = (content, onReady) => {
             ElMessage.success('图片上传成功')
           }
         } else {
-          console.error('Vditor instance is null')
-          ElMessage.error('编辑器未准备好')
+          // Vditor 未准备好，可能是初始化前的快速粘贴，可以忽略
+          console.warn('Vditor instance not ready, paste ignored')
         }
       }, true) // 使用捕获阶段
     },
@@ -702,22 +701,17 @@ const initVditor = (content, onReady) => {
           if (textData) clipboardText = textData
         }
 
-        console.log('Clipboard text:', clipboardText)
-
         if (clipboardText) {
           // 匹配 markdown 图片语法：![](url) 或 ![alt](url)
           const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
           let match
           let hasExternalImage = false
-          let imageUrl = null
 
           // 检查是否包含外部图片URL
           while ((match = mdImageRegex.exec(clipboardText)) !== null) {
             const url = match[2]
             if (url.startsWith('http://') || url.startsWith('https://')) {
               hasExternalImage = true
-              imageUrl = match[0] // 完整markdown语法
-              console.log('Found external image URL:', url)
               break
             }
           }
@@ -725,12 +719,9 @@ const initVditor = (content, onReady) => {
           // 如果没有markdown语法，检查是否是纯图片URL
           if (!hasExternalImage && clipboardText.match(/^https?:\/\/.*\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i)) {
             hasExternalImage = true
-            imageUrl = clipboardText.trim()
-            console.log('Found raw image URL:', imageUrl)
           }
 
           if (!hasExternalImage) {
-            console.log('No external image found, let Vditor handle')
             return // 没有外部图片，让 Vditor 处理
           }
 
@@ -740,7 +731,6 @@ const initVditor = (content, onReady) => {
           try {
             // 下载并上传所有外部图片
             const newText = await transformExternalImages(clipboardText, getToken)
-            console.log('Transformed text:', newText)
 
             // 插入转换后的文本
             vditor.insertValue(newText)
