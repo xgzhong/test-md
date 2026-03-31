@@ -24,6 +24,7 @@
 - **分享功能** - 生成分享链接，HTML 内容经 DOMPurify 净化防 XSS
 - **工作日志** - 自动生成当月工作日志模板
 - **分页浏览** - 笔记列表支持分页加载，避免大数据量卡顿
+- **图片上传** - 粘贴外部图片链接时自动上传到 OSS
 
 ### 分类管理
 - **树形结构** - 支持多级分类（层级结构）
@@ -97,7 +98,8 @@ test-md/
 │   │   ├── AuthController.cs      # 认证接口
 │   │   ├── NotesController.cs     # 笔记接口
 │   │   ├── FoldersController.cs   # 分类接口
-│   │   └── SharedController.cs   # 分享接口
+│   │   ├── SharedController.cs   # 分享接口
+│   │   └── OssController.cs      # OSS 上传接口
 │   ├── Models/                    # 数据模型
 │   │   ├── User.cs
 │   │   ├── Note.cs
@@ -303,6 +305,20 @@ server {
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | GET | /api/shared/:token | 通过分享链接查看笔记 |
+
+### OSS 上传
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | /api/oss/presigned-url | 获取预签名 URL，浏览器直传 OSS |
+| POST | /api/oss/link-to-img | 下载外部图片并上传到 OSS |
+| POST | /api/oss/upload | 服务器中转上传（备用方案） |
+
+**预签名 URL 流程**：
+1. 客户端请求服务器获取预签名 URL
+2. 服务器生成带 30 分钟过期时间的签名 URL
+3. 客户端直接通过预签名 URL 上传到 OSS
+4. 传输文件不需要服务器带宽
 
 ## 数据库设计
 

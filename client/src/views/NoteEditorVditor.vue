@@ -434,8 +434,12 @@ const initVditor = (content, onReady) => {
     mode: 'ir',
     placeholder: '在这里使用 Markdown 编写笔记...',
     lang: 'zh_CN',
-    i18n: window.VditorI18n,
-    cdn: 'https://cdn.jsdelivr.net/npm/vditor@3.11.2',
+    cdn: '',
+    preview: {
+      theme: {
+        path: '/dist/css/content-theme'
+      }
+    },
     tip: false,
     after: () => {
       vditorLoading.value = false

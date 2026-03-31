@@ -26,6 +26,7 @@ A web-based Markdown note-taking application with note categorization, version h
 - **Sharing** - Generate share links with DOMPurify HTML sanitization
 - **Work Log** - Auto-generate monthly work log templates
 - **Pagination** - Paginated note list for handling large datasets
+- **Image Upload** - Paste external image links to automatically upload to OSS
 
 ### Category Management
 
@@ -103,7 +104,8 @@ test-md/
 │   │   ├── AuthController.cs      # Authentication
 │   │   ├── NotesController.cs      # Notes API
 │   │   ├── FoldersController.cs   # Folders API
-│   │   └── SharedController.cs    # Sharing API
+│   │   ├── SharedController.cs    # Sharing API
+│   │   └── OssController.cs      # OSS Upload API
 │   ├── Models/                     # Data Models
 │   │   ├── User.cs
 │   │   ├── Note.cs
@@ -309,6 +311,20 @@ server {
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /api/shared/:token | View note via share link |
+
+### OSS Upload
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/oss/presigned-url | Get presigned URL for direct browser-to-OSS upload |
+| POST | /api/oss/link-to-img | Download external image and upload to OSS |
+| POST | /api/oss/upload | Server-side upload (fallback) |
+
+**Presigned URL Flow**:
+1. Client requests presigned URL from server
+2. Server generates signed URL with 30-minute expiration
+3. Client uploads directly to OSS using the presigned URL
+4. No server bandwidth needed for file transfer
 
 ## Database Design
 
