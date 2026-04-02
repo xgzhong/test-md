@@ -191,7 +191,10 @@ export const authAPI = {
     api.post('/auth/logout').then(() => undefined),
 
   getUser: (): Promise<User> =>
-    api.get('/auth/me').then(res => res.data)
+    api.get('/auth/me').then(res => res.data),
+
+  changePassword: (data: { oldPassword: string; newPassword: string }): Promise<{ message: string }> =>
+    api.post('/auth/change-password', data).then(res => res.data)
 }
 
 // Notes API - returns Note directly, not wrapped

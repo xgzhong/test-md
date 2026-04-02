@@ -50,7 +50,7 @@
           </router-link>
           <el-divider direction="vertical" />
           <el-icon class="user-icon"><User /></el-icon>
-          <span class="username">{{ authStore.user?.username || authStore.user?.email }}</span>
+          <span class="username" @click="showChangePasswordDialog = true">{{ authStore.user?.username || authStore.user?.email }}</span>
           <el-divider direction="vertical" />
           <el-button type="info" size="small" text @click="logout">
             <el-icon><SwitchButton /></el-icon>
@@ -141,6 +141,25 @@
         <el-button type="primary" @click="updateFolderName">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 修改密码对话框 -->
+    <el-dialog v-model="showChangePasswordDialog" title="修改密码" width="400px">
+      <el-form :model="changePasswordForm" :rules="changePasswordRules" ref="changePasswordFormRef" @submit.prevent="handleChangePassword">
+        <el-form-item label="旧密码" prop="oldPassword">
+          <el-input v-model="changePasswordForm.oldPassword" type="password" placeholder="请输入旧密码" show-password />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="changePasswordForm.newPassword" type="password" placeholder="请输入新密码" show-password />
+        </el-form-item>
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input v-model="changePasswordForm.confirmPassword" type="password" placeholder="请再次输入新密码" show-password @keyup.enter="handleChangePassword" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showChangePasswordDialog = false">取消</el-button>
+        <el-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -153,7 +172,7 @@ import { useAuthStore } from '../stores/auth'
 import Sidebar from '../components/Sidebar.vue'
 import { useSidebar } from '../composables/useSidebar'
 import { formatDate, escapeHtml } from '../composables/useCommon'
-import { notesAPI, type Note, type Folder, type PagedMetaData } from '../api'
+import { notesAPI, authAPI, type Note, type Folder, type PagedMetaData } from '../api'
 import packageJson from '../../package.json'
 
 const router = useRouter()
@@ -175,7 +194,32 @@ const pageMeta = ref<PagedMetaData | null>(null)
 
 const showFolderDialog = ref(false)
 const showEditFolderDialog = ref(false)
+const showChangePasswordDialog = ref(false)
+const changePasswordLoading = ref(false)
+const changePasswordFormRef = ref(null)
 const editFolderForm = ref({ id: null as string | null, name: '', parentId: null as string | null })
+const changePasswordForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
+const changePasswordRules = {
+  oldPassword: [{ required: true, message: '请输入旧密码', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 8, message: '密码长度至少8位', trigger: 'blur' },
+    { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, message: '密码必须包含大小写字母和数字', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认新密码', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (changePasswordForm.value.newPassword !== changePasswordForm.value.confirmPassword) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 let lastSearchTime = 0  // 用于忽略过时的响应
 
@@ -210,7 +254,7 @@ const loadNotes = async () => {
     const tc = res.metaData?.totalCount
     totalCount.value = typeof tc === 'number' ? tc : (typeof tc === 'string' ? parseInt(tc, 10) : 0)
     pageMeta.value = res.metaData || null
-  } catch (error: unknown) {
+  } catch (error) {
     if (thisSearchTime !== lastSearchTime) return
     ElMessage.error(error instanceof Error ? error.message : '加载笔记失败')
   }
@@ -343,6 +387,35 @@ const logout = async () => {
   }
 }
 
+const handleChangePassword = async () => {
+  if (!changePasswordFormRef.value) return
+  try {
+    await changePasswordFormRef.value.validate()
+  } catch {
+    return // Validation failed
+  }
+
+  if (changePasswordForm.value.newPassword !== changePasswordForm.value.confirmPassword) {
+    ElMessage.error('两次输入的密码不一致')
+    return
+  }
+
+  changePasswordLoading.value = true
+  try {
+    await authAPI.changePassword({
+      oldPassword: changePasswordForm.value.oldPassword,
+      newPassword: changePasswordForm.value.newPassword
+    })
+    ElMessage.success('密码修改成功')
+    showChangePasswordDialog.value = false
+    changePasswordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '修改密码失败')
+  } finally {
+    changePasswordLoading.value = false
+  }
+}
+
 // 预加载笔记编辑器组件（只预加载一次）
 let editorPreloaded = false
 const preloadEditor = () => {
@@ -410,6 +483,11 @@ onMounted(() => {
 .header-right .username {
   color: #606266;
   font-size: 14px;
+  cursor: pointer;
+}
+
+.header-right .username:hover {
+  color: #409eff;
 }
 
 .header-right .el-divider {

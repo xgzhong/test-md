@@ -18,6 +18,7 @@ A web-based Markdown note-taking application with note categorization, version h
 
 - **Register/Login** - JWT token authentication
 - **Secure Storage** - Tokens stored in HttpOnly Cookie to prevent XSS attacks
+- **Change Password** - Click username to change login password
 
 ### Note Management
 
@@ -281,6 +282,7 @@ server {
 | POST | /api/auth/login | User login |
 | POST | /api/auth/logout | User logout |
 | GET | /api/auth/me | Get current user info |
+| POST | /api/auth/change-password | Change password |
 
 ### Notes
 

@@ -137,6 +137,36 @@ public class AuthController : BaseController
         return ReturnResult(Result.Success(new UserDto(user.Id, user.Username, user.Email)));
     }
 
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return ReturnResult(Result.Unauthorized());
+        }
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            return ReturnResult(Result.Unauthorized());
+        }
+
+        // Verify old password
+        if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, user.Password))
+        {
+            return ReturnResult(Result.Failure("旧密码错误"));
+        }
+
+        // Hash and save new password
+        user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, BCrypt.Net.BCrypt.GenerateSalt(10));
+        user.UpdatedAt = DateTimeOffset.UtcNow;
+        user.UpdatedBy = userId;
+        await _context.SaveChangesAsync();
+
+        return ReturnResult(Result.Success("密码修改成功"));
+    }
+
     private string GenerateToken(long userId)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT_SECRET not configured")));

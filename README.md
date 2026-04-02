@@ -17,6 +17,7 @@
 ### 用户认证
 - **注册/登录** - JWT 令牌认证
 - **安全存储** - Token 存储在 HttpOnly Cookie 中，防止 XSS 攻击
+- **修改密码** - 点击用户名可修改登录密码
 
 ### 笔记管理
 - **Markdown 编辑器** - 使用 Vditor 实现所见即所得编辑
@@ -275,6 +276,7 @@ server {
 | POST | /api/auth/login | 用户登录 |
 | POST | /api/auth/logout | 用户登出 |
 | GET | /api/auth/me | 获取当前用户信息 |
+| POST | /api/auth/change-password | 修改密码 |
 
 ### 笔记接口
 

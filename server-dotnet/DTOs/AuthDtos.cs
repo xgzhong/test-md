@@ -34,6 +34,16 @@ public record AuthResponse(string Message, string? Token, UserDto? User);
 public record UserDto(long Id, string Username, string Email);
 public record UserResponse(UserDto User);
 
+public record ChangePasswordRequest(
+    [Required(ErrorMessage = "旧密码不能为空")]
+    string OldPassword,
+
+    [Required(ErrorMessage = "新密码不能为空")]
+    [StringLength(100, MinimumLength = AppConstants.MinPasswordLength, ErrorMessage = "密码长度必须在8-100之间")]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$", ErrorMessage = "密码必须包含大小写字母和数字")]
+    string NewPassword
+);
+
 // Note DTOs
 public record NoteDto(long Id, long? FolderId, string? FolderName, string Title, string Content, bool IsShared, string? ShareToken, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public record CreateNoteRequest(string? Title, string? Content, string? FolderId);
