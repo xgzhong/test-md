@@ -27,6 +27,8 @@ A web-based Markdown note-taking application with note categorization, version h
 - **Work Log** - Auto-generate monthly work log templates
 - **Pagination** - Paginated note list for handling large datasets
 - **Image Upload** - Paste external image links to automatically upload to OSS
+- **File Upload** - Support various file types up to 200MB per file
+- **Wide Mode** - Editor supports wide mode toggle for large displays
 
 ### Category Management
 
@@ -175,7 +177,16 @@ CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 > On **Linux/macOS** use `export`, on **Windows** use `set` or configure in a `.env` file.
 
-3. **Backend Configuration** (`server-dotnet/appsettings.json`):
+3. **OSS Configuration** (for file uploads, requires Aliyun OSS):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OSS:AccessKeyId` | Aliyun AccessKey ID | `LTAI5txxx` |
+| `OSS:AccessKeySecret` | Aliyun AccessKey Secret | `xxx` |
+| `OSS:Endpoint` | OSS Endpoint | `https://oss-cn-shanghai.aliyuncs.com` |
+| `OSS:BucketName` | OSS Bucket name | `note-md` |
+
+4. **Backend Configuration** (`server-dotnet/appsettings.json`):
 
 ```json
 {
@@ -187,6 +198,12 @@ CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
   },
   "CORS": {
     "AllowedOrigins": "${CORS_ALLOWED_ORIGINS}"
+  },
+  "OSS": {
+    "AccessKeyId": "${OSS_ACCESS_KEY_ID}",
+    "AccessKeySecret": "${OSS_ACCESS_KEY_SECRET}",
+    "Endpoint": "https://oss-cn-shanghai.aliyuncs.com",
+    "BucketName": "note-md"
   }
 }
 ```
@@ -326,6 +343,24 @@ server {
 3. Client uploads directly to OSS using the presigned URL
 4. No server bandwidth needed for file transfer
 
+**Supported File Types**:
+
+| Type | Extensions |
+|------|------------|
+| Images | .jpg, .jpeg, .png, .gif, .webp, .bmp, .svg, .tif, .tiff |
+| Documents | .pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx |
+| Text | .txt, .md, .sql, .bak, .cs, .js, .vue, .html, .htm, .css, .sass |
+| Archives | .zip, .rar |
+
+**File Naming**:
+- Format: `yyyy-MM-dd_original_filename_random.ext`
+- Special characters filtered, keeping only letters, digits, Chinese characters, underscores, hyphens
+- Filename length limited to 100 characters
+
+**File Display**:
+- Image files: Displayed as Markdown image `![filename](URL)`
+- Other files: Displayed as attachment `[📎 filename.ext](URL)`
+
 ## Database Design
 
 ### Tables
@@ -363,6 +398,8 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 - **Soft Delete** - Notes are soft-deleted and can be recovered
 - **Request Cancellation** - Auto-cancel pending requests on route change to prevent race conditions
 - **Search Injection Prevention** - LIKE query special character escaping
+- **File Type Validation** - File extension and Content-Type validated before upload
+- **Filename Security** - Upload filenames sanitized to prevent path traversal attacks
 
 ## Performance Optimization
 
@@ -380,11 +417,17 @@ A: Ensure the backend API is running. Check browser console for errors.
 **Q: Drag and drop categories not working?**
 A: Make sure your browser supports HTML5 Drag and Drop API.
 
-**Q: How to customize folder icons?**
-A: Current version uses Element Plus built-in icons. Custom icons coming soon.
+**Q: File upload fails with "unsupported file type"?**
+A: Check if the file extension is in the supported list. See "Supported File Types" above.
+
+**Q: Large file upload fails?**
+A: Ensure the file is under 200MB. Also check if Nginx or other reverse proxy is configured with `client_max_body_size`.
 
 **Q: Notes not saving?**
 A: Check network connection and backend API accessibility. You can also check the browser's network tab.
+
+**Q: How to configure OSS for file uploads?**
+A: Create an OSS Bucket on Aliyun and configure AccessKey and Bucket information in environment variables or `appsettings.json`.
 
 ## Contributing
 

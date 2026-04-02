@@ -25,6 +25,8 @@
 - **工作日志** - 自动生成当月工作日志模板
 - **分页浏览** - 笔记列表支持分页加载，避免大数据量卡顿
 - **图片上传** - 粘贴外部图片链接时自动上传到 OSS
+- **文件上传** - 支持上传多种文件类型，单文件最大 200MB
+- **宽屏模式** - 编辑器支持宽屏模式切换，适合大屏显示
 
 ### 分类管理
 - **树形结构** - 支持多级分类（层级结构）
@@ -169,7 +171,16 @@ CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 > **Linux/macOS** 使用 `export` 赋值，**Windows** 可使用 `set` 或在 `.env` 文件中配置。
 
-3. **后端配置** (`server-dotnet/appsettings.json`):
+3. **OSS 配置** (用于文件上传，需要阿里云 OSS):
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `OSS:AccessKeyId` | 阿里云 AccessKey ID | `LTAI5txxx` |
+| `OSS:AccessKeySecret` | 阿里云 AccessKey Secret | `xxx` |
+| `OSS:Endpoint` | OSS  Endpoint | `https://oss-cn-shanghai.aliyuncs.com` |
+| `OSS:BucketName` | OSS Bucket 名称 | `note-md` |
+
+4. **后端配置** (`server-dotnet/appsettings.json`):
 
 ```json
 {
@@ -181,6 +192,12 @@ CREATE DATABASE markdown_notes CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
   },
   "CORS": {
     "AllowedOrigins": "${CORS_ALLOWED_ORIGINS}"
+  },
+  "OSS": {
+    "AccessKeyId": "${OSS_ACCESS_KEY_ID}",
+    "AccessKeySecret": "${OSS_ACCESS_KEY_SECRET}",
+    "Endpoint": "https://oss-cn-shanghai.aliyuncs.com",
+    "BucketName": "note-md"
   }
 }
 ```
@@ -320,6 +337,24 @@ server {
 3. 客户端直接通过预签名 URL 上传到 OSS
 4. 传输文件不需要服务器带宽
 
+**支持的文件类型**：
+
+| 类型 | 扩展名 |
+|------|--------|
+| 图片 | .jpg, .jpeg, .png, .gif, .webp, .bmp, .svg, .tif, .tiff |
+| 文档 | .pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx |
+| 文本 | .txt, .md, .sql, .bak, .cs, .js, .vue, .html, .htm, .css, .sass |
+| 压缩 | .zip, .rar |
+
+**上传文件命名**：
+- 格式：`yyyy-MM-dd_原文件名_random.ext`
+- 特殊字符自动过滤，仅保留字母、数字、中文、下划线、连字符
+- 文件名长度限制 100 字符
+
+**文件展示**：
+- 图片文件：直接以 Markdown 图片格式 `![文件名](URL)` 展示
+- 其他文件：统一以附件格式 `[📎 文件名.ext](URL)` 展示
+
 ## 数据库设计
 
 ### 表结构
@@ -357,6 +392,8 @@ server {
 - **软删除** - 笔记删除采用软删除策略，可恢复
 - **请求取消** - 路由切换时自动取消 pending 请求，防止竞态条件
 - **搜索防注入** - LIKE 查询特殊字符转义
+- **文件类型验证** - 上传前验证文件扩展名和 Content-Type
+- **文件名安全** - 上传文件名去除特殊字符，防止路径遍历攻击
 
 ## 性能优化
 
@@ -374,11 +411,17 @@ A: 确保后端 API 正常运行，检查浏览器控制台是否有错误信息
 **Q: 拖拽分类不生效？**
 A: 检查浏览器是否支持 HTML5 Drag and Drop API。
 
-**Q: 如何自定义分类的图标？**
-A: 目前版本使用 Element Plus 内置图标，后续版本将支持自定义。
+**Q: 文件上传失败，提示"不支持的文件类型"？**
+A: 检查文件扩展名是否在支持列表中，参见上方「支持的文件类型」。
+
+**Q: 上传大文件失败？**
+A: 确保文件小于 200MB，同时检查 Nginx 等反向代理是否配置了 `client_max_body_size`。
 
 **Q: 笔记内容无法保存？**
 A: 检查网络连接，确认后端 API 可访问。也可以查看浏览器控制台的网络请求面板。
+
+**Q: 如何配置 OSS 用于文件上传？**
+A: 需要在阿里云创建 OSS Bucket，并在环境变量或 `appsettings.json` 中配置 AccessKey 和 Bucket 信息。
 
 ## 贡献
 

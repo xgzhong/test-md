@@ -179,6 +179,18 @@ const route = useRoute()
 // Constants
 const AUTO_SAVE_DEBOUNCE_MS = 3000
 
+// 生成附件展示格式（非图片文件使用统一格式）
+const getAttachmentMarkdown = (fileName, fileUrl) => {
+  return `[📎 ${fileName}](${fileUrl})`
+}
+
+// 判断是否为图片类型
+const isImageFile = (fileName) => {
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg']
+  const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase()
+  return imageExts.includes(ext)
+}
+
 // Request cancellation
 let abortController = null
 
@@ -639,7 +651,8 @@ const initVditor = (content, onReady) => {
       pin: true
     },
     upload: {
-      max: 10 * 1024 * 1024,  // 10MB
+      max: 200 * 1024 * 1024,  // 200MB
+      linkAccept: '.jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.tif,.tiff,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt,.md,.sql,.bak,.cs,.js,.vue,.html,.htm,.css,.sass',
       // 粘贴图片时自动上传到 OSS
       paste: async (ev, files) => {
         // 从 cookie 获取 token
@@ -691,7 +704,6 @@ const initVditor = (content, onReady) => {
 
             const imgLink = `![${fName}](${finalUrl})`
             vditor.insertValue(imgLink)
-            ElMessage.success('图片上传成功')
           }
 
           uploadAndInsert(file, file.name || 'paste_image.png')
@@ -801,9 +813,15 @@ const initVditor = (content, onReady) => {
             return false
           }
 
-          // 3. 上传成功，插入图片链接到编辑器
-          const imgLink = `![${file.name}](${finalUrl})`
-          vditor.insertValue(imgLink)
+          // 3. 上传成功，插入文件链接到编辑器
+          // 图片使用 markdown 图片语法，文件使用统一附件格式
+          let insertContent
+          if (isImageFile(file.name)) {
+            insertContent = `![${file.name}](${finalUrl})`
+          } else {
+            insertContent = getAttachmentMarkdown(file.name, finalUrl)
+          }
+          vditor.insertValue(insertContent)
           ElMessage.success('上传成功')
         } catch (error) {
           console.error('Upload error:', error)

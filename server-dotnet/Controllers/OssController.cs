@@ -60,10 +60,8 @@ public class OssController : ControllerBase
             var ext = Path.GetExtension(fileName).ToLowerInvariant();
             if (string.IsNullOrEmpty(ext)) ext = ".png";
 
-            // 生成新文件名
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var random = Random.Shared.Next(1000, 9999);
-            var newFileName = $"{timestamp}_{random}{ext}";
+            // 生成安全的文件名
+            var newFileName = GenerateSafeFileName(fileName, ext);
             var objectName = $"uploads/temp/{newFileName}";
 
             // 清理 endpoint
@@ -127,6 +125,32 @@ public class OssController : ControllerBase
     }
 
     /// <summary>
+    /// 生成安全的文件名：原文件名（排除特殊字符）+ 随机字符串 + 扩展名
+    /// </summary>
+    private static string GenerateSafeFileName(string originalFileName, string ext)
+    {
+        // 移除非法的文件名字符，只保留字母、数字、中文、下划线、连字符、点
+        var safeName = new StringBuilder();
+        foreach (var c in Path.GetFileNameWithoutExtension(originalFileName))
+        {
+            if (char.IsLetterOrDigit(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.OtherLetter
+                || c == '_' || c == '-' || c == '.')
+            {
+                safeName.Append(c);
+            }
+        }
+        // 移除开头和结尾的点（防止隐藏文件）
+        var name = safeName.ToString().Trim('.');
+        if (string.IsNullOrEmpty(name)) name = "file";
+        // 限制文件名长度
+        if (name.Length > 100) name = name[..100];
+
+        var random = Random.Shared.Next(1000, 9999);
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd");
+        return $"{timestamp}_{name}_{random}{ext}";
+    }
+
+    /// <summary>
     /// 获取预签名 URL（用于浏览器直传 OSS）
     /// </summary>
     [HttpPost("presigned-url")]
@@ -144,7 +168,7 @@ public class OssController : ControllerBase
         }
 
         // 验证文件类型
-        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar" };
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar", ".txt", ".md", ".sql", ".bak", ".cs", ".js", ".vue", ".html", ".htm", ".css", ".sass" };
         var ext = Path.GetExtension(request.FileName).ToLowerInvariant();
 
         // 如果没有扩展名或扩展名不在列表中，尝试从 ContentType 推断
@@ -153,12 +177,40 @@ public class OssController : ControllerBase
             var contentType = request.ContentType?.ToLowerInvariant() ?? "";
             ext = contentType switch
             {
+                // 图片
                 "image/png" => ".png",
                 "image/jpeg" or "image/jpg" => ".jpg",
                 "image/gif" => ".gif",
                 "image/webp" => ".webp",
                 "image/bmp" => ".bmp",
                 "image/svg+xml" => ".svg",
+                "image/tiff" => ".tiff",
+                // PDF
+                "application/pdf" => ".pdf",
+                // Office 文档 - Word
+                "application/msword" => ".doc",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ".docx",
+                // Office 文档 - Excel
+                "application/vnd.ms-excel" => ".xls",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => ".xlsx",
+                // Office 文档 - PowerPoint
+                "application/vnd.ms-powerpoint" => ".ppt",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation" => ".pptx",
+                // 压缩文件
+                "application/zip" => ".zip",
+                "application/x-zip-compressed" => ".zip",
+                "application/x-rar-compressed" => ".rar",
+                "application/vnd.rar" => ".rar",
+                // 文本文件
+                "text/plain" => ".txt",
+                "text/markdown" => ".md",
+                "text/x-sql" or "application/sql" => ".sql",
+                "text/css" => ".css",
+                "text/html" => ".html",
+                "application/javascript" or "text/javascript" => ".js",
+                // 代码文件
+                "text/x-csharp" => ".cs",
+                "text/x-vue" or "text/html" => ".vue",
                 _ => ext
             };
 
@@ -169,15 +221,13 @@ public class OssController : ControllerBase
         }
 
         // 验证文件大小
-        if (request.FileSize > 10 * 1024 * 1024)
+        if (request.FileSize > 200 * 1024 * 1024)
         {
-            return BadRequest(new { error = "文件大小超过限制（最大 10MB）" });
+            return BadRequest(new { error = "文件大小超过限制（最大 200MB）" });
         }
 
-        // 生成文件名
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var random = Random.Shared.Next(1000, 9999);
-        var newFileName = $"{timestamp}_{random}{ext}";
+        // 生成安全的文件名
+        var newFileName = GenerateSafeFileName(request.FileName, ext);
 
         // 按笔记ID存储
         var folderPrefix = string.IsNullOrEmpty(request.NoteId) || request.NoteId == "new"
@@ -249,15 +299,13 @@ public class OssController : ControllerBase
             return BadRequest(new { error = "OSS 未配置" });
         }
 
-        if (file.Length > 10 * 1024 * 1024)
+        if (file.Length > 200 * 1024 * 1024)
         {
-            return BadRequest(new { error = "文件大小超过限制（最大 10MB）" });
+            return BadRequest(new { error = "文件大小超过限制（最大 200MB）" });
         }
 
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var random = Random.Shared.Next(1000, 9999);
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var newFileName = $"{timestamp}_{random}{ext}";
+        var newFileName = GenerateSafeFileName(file.FileName, ext);
 
         var folderPrefix = string.IsNullOrEmpty(noteId) || noteId == "new"
             ? "temp"
