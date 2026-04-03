@@ -116,7 +116,7 @@ const api = axios.create({
   withCredentials: true
 })
 
-const getTokenFromCookie = (): string | null => {
+export const getTokenFromCookie = (): string | null => {
   const cookies = document.cookie.split('; ')
   const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
   if (tokenCookie) {
@@ -156,6 +156,15 @@ api.interceptors.response.use(
         message = data
       } else if (Array.isArray(data)) {
         message = data.join(', ')
+      } else if (data?.errors && typeof data.errors === 'object') {
+        // 处理 ASP.NET Core 验证错误格式 { errors: { Field: ["message"] } }
+        const errors = data.errors
+        const firstField = Object.keys(errors)[0]
+        if (firstField && Array.isArray(errors[firstField]) && errors[firstField].length > 0) {
+          message = errors[firstField][0]
+        } else {
+          message = data.title || '请求失败'
+        }
       } else if (data?.message) {
         message = data.message
       } else if (data?.error?.message) {

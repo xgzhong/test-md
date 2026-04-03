@@ -1,29 +1,30 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
-import { notesAPI, foldersAPI, type Folder, type Note } from '../api'
+import { notesAPI, foldersAPI, type Folder, type Note, type PagedMetaData } from '../api'
 import { getParentIdStr, isRootId, isSameParentId, isDescendant, flattenFolders } from './useCommon'
 
 /**
  * Sidebar Composable - 封装侧边栏所有逻辑
- * 支持独立使用或配合 Sidebar 组件
+ * 单例模式：所有调用共享同一份状态
  */
+
+// ============== 单例状态 (模块级共享) ==============
+const folders = ref<Folder[]>([])
+const notes = ref<Note[]>([])
+const uncategorizedCount = ref(0)
+const isLoading = ref(false)
+const saving = ref(false)
+
+// 拖拽状态
+const draggedFolder = ref<Folder | null>(null)
+const dragOverFolder = ref<Folder | null>(null)
+const hoverSide = ref<'sibling' | 'child'>('child')
+const hoverPosition = ref<'above' | 'below'>('below')
+
+// 展开状态
+const expandedKeys = ref<Record<number | string, boolean>>({})
+
 export function useSidebar() {
-  // ============== State ==============
-  const folders = ref<Folder[]>([])
-  const notes = ref<Note[]>([])
-  const uncategorizedCount = ref(0)
-  const isLoading = ref(false)
-  const saving = ref(false)
-
-  // 拖拽状态
-  const draggedFolder = ref<Folder | null>(null)
-  const dragOverFolder = ref<Folder | null>(null)
-  const hoverSide = ref<'sibling' | 'child'>('child')
-  const hoverPosition = ref<'above' | 'below'>('below')
-
-  // 展开状态
-  const expandedKeys = ref<Record<number | string, boolean>>({})
-
   // ============== Computed ==============
   const rootFolders = computed(() => folders.value.filter(f => Number(f.parentId) === 0))
 
@@ -56,16 +57,49 @@ export function useSidebar() {
     }
   }
 
+  // 按文件夹加载笔记（分页，按需加载）
+  const loadNotesForFolder = async (folderId: number | string | null, page: number = 1, pageSize: number = 50) => {
+    try {
+      const params: Record<string, string | number | undefined> = { page, pageSize }
+      if (folderId !== null) {
+        params.folderId = folderId
+      } else {
+        params.folderId = 'null'
+      }
+      const res = await notesAPI.getPageNotes(params)
+      const newNotes = res.items || []
+      if (page === 1) {
+        // 第一页：替换现有笔记
+        notes.value = newNotes
+      } else {
+        // 后续页：追加到现有笔记
+        const existingIds = new Set(notes.value.map(n => n.id))
+        const uniqueNewNotes = newNotes.filter(n => !existingIds.has(n.id))
+        notes.value = [...notes.value, ...uniqueNewNotes]
+      }
+      return res.metaData
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : '加载笔记失败')
+      return null
+    }
+  }
+
   // 加载所有数据
   const loadAll = async () => {
-    await Promise.all([loadFolders(), loadNotes()])
+    await loadFolders()
+    // 不再预加载所有笔记，改为按需加载
   }
 
   // 展开/折叠
-  const toggleExpand = (folderId: number | string) => {
+  const toggleExpand = async (folderId: number | string) => {
+    const isExpanding = !expandedKeys.value[folderId]
     expandedKeys.value = {
       ...expandedKeys.value,
-      [folderId]: !expandedKeys.value[folderId]
+      [folderId]: isExpanding
+    }
+    // 展开时按需加载该文件夹的笔记
+    if (isExpanding) {
+      await loadNotesForFolder(folderId)
     }
   }
 
@@ -238,7 +272,13 @@ export function useSidebar() {
     try {
       const note = await notesAPI.createNote({ title, content, folderId })
       ElMessage.success('笔记创建成功')
-      await loadNotes()
+      // 刷新当前展开的文件夹的笔记
+      const expandedFolderId = Object.keys(expandedKeys.value).find(k => expandedKeys.value[k])
+      if (expandedFolderId) {
+        await loadNotesForFolder(expandedFolderId)
+      }
+      // 刷新分类列表（更新笔记数量）
+      await loadFolders()
       return note
     } catch (error: unknown) {
       ElMessage.error(error instanceof Error ? error.message : '创建笔记失败')
@@ -259,7 +299,12 @@ export function useSidebar() {
     try {
       await notesAPI.deleteNote(id)
       ElMessage.success('笔记删除成功')
-      await loadNotes()
+      // 刷新当前展开的文件夹的笔记
+      const expandedFolderId = Object.keys(expandedKeys.value).find(k => expandedKeys.value[k])
+      if (expandedFolderId) {
+        await loadNotesForFolder(expandedFolderId)
+      }
+      // 刷新分类列表（更新笔记数量）
       await loadFolders()
     } catch (error: unknown) {
       ElMessage.error(error instanceof Error ? error.message : '删除笔记失败')
@@ -309,6 +354,7 @@ export function useSidebar() {
     // Actions
     loadFolders,
     loadNotes,
+    loadNotesForFolder,
     loadAll,
     toggleExpand,
     onDragStart,
@@ -346,8 +392,9 @@ export interface SidebarReturn {
   // Actions
   loadFolders: () => Promise<void>
   loadNotes: (params?: Record<string, string | number | undefined>) => Promise<void>
+  loadNotesForFolder: (folderId: number | string | null, page?: number, pageSize?: number) => Promise<PagedMetaData | null>
   loadAll: () => Promise<void>
-  toggleExpand: (folderId: number | string) => void
+  toggleExpand: (folderId: number | string) => Promise<void>
   onDragStart: (event: DragEvent, folder: Folder) => void
   onDragOver: (event: DragEvent, folder: Folder) => void
   onDragLeave: () => void

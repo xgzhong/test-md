@@ -40,6 +40,12 @@ const routes = [
     component: () => import('../views/Shared.vue')
   },
   {
+    // 安全访问路径：token 只在首次访问时使用，之后通过 session cookie 访问
+    path: '/shared/view/:id',
+    name: 'SharedView',
+    component: () => import('../views/Shared.vue')
+  },
+  {
     path: '/about',
     name: 'About',
     component: () => import('../views/About.vue'),

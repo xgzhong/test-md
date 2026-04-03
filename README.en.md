@@ -24,7 +24,7 @@ A web-based Markdown note-taking application with note categorization, version h
 
 - **Markdown Editor** - WYSIWYG editing with Vditor
 - **Version History** - Manual save with restore and delete support
-- **Sharing** - Generate share links with DOMPurify HTML sanitization
+- **Sharing** - Generate share links with secure access (token not exposed in URL)
 - **Work Log** - Auto-generate monthly work log templates
 - **Pagination** - Paginated note list for handling large datasets
 - **Image Upload** - Paste external image links to automatically upload to OSS
@@ -76,7 +76,8 @@ test-md/
 │   │   ├── api/                   # API client (Axios)
 │   │   ├── components/            # Reusable components
 │   │   │   ├── Sidebar.vue        # Sidebar component
-│   │   │   └── FolderTreeItem.vue # Folder tree component
+│   │   │   ├── FolderTreeItem.vue # Folder tree component
+│   │   │   └── ChangePasswordDialog.vue # Change password dialog
 │   │   ├── composables/           # Composable functions
 │   │   │   ├── useSidebar.ts      # Sidebar logic
 │   │   │   └── useCommon.ts       # Common utilities
@@ -329,7 +330,11 @@ server {
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /api/shared/:token | View note via share link |
+| POST | /api/shared/access | Secure share access (exchange token for session cookie) |
+| GET | /api/shared/view/:id | View shared note via session cookie |
+| POST | /api/shared/logout | Clear share session |
+
+> **Security Note**: Share token is only used on first access, subsequent access via HttpOnly Cookie session to avoid token exposure in URL.
 
 ### OSS Upload
 
@@ -394,8 +399,9 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 
 - **JWT Token** - Stored in HttpOnly Cookie to prevent XSS attacks
 - **Password Hashing** - BCrypt algorithm for secure storage
+- **Secure Sharing** - Share token used only on first access, then via HttpOnly Cookie session (token not exposed in URL)
 - **XSS Protection** - Shared content sanitized with DOMPurify
-- **Rate Limiting** - Auth: 5 req/min, Notes: 60 req/sec to prevent brute force
+- **Rate Limiting** - Auth: 5 req/min, Shared: 30 req/min, Notes: 60 req/sec
 - **CORS** - Strict cross-origin policy configuration
 - **Soft Delete** - Notes are soft-deleted and can be recovered
 - **Request Cancellation** - Auto-cancel pending requests on route change to prevent race conditions
@@ -408,8 +414,10 @@ All tables use Snowflake ID as primary key (`BIGINT`) with audit fields:
 - **Editor Preloading** - Preload Vditor editor on note card hover
 - **N+1 Query Optimization** - Use bulk update instead of loop update
 - **Pagination** - Notes list supports paginated loading
+- **On-demand Note Loading** - Load notes only when expanding folders in sidebar
 - **Request Deduplication** - Note auto-save with debounce
 - **Stale Response Detection** - Ignore outdated responses to prevent data inconsistency
+- **Singleton State Management** - useSidebar composable uses singleton pattern for consistent state across components
 
 ## FAQ
 

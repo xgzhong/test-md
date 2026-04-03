@@ -22,7 +22,7 @@
 ### 笔记管理
 - **Markdown 编辑器** - 使用 Vditor 实现所见即所得编辑
 - **版本历史** - 手动保存版本，支持版本回溯和删除
-- **分享功能** - 生成分享链接，HTML 内容经 DOMPurify 净化防 XSS
+- **分享功能** - 生成分享链接，安全访问（token 不暴露在 URL）
 - **工作日志** - 自动生成当月工作日志模板
 - **分页浏览** - 笔记列表支持分页加载，避免大数据量卡顿
 - **图片上传** - 粘贴外部图片链接时自动上传到 OSS
@@ -70,7 +70,8 @@ test-md/
 │   │   ├── api/                   # API 请求封装 (Axios)
 │   │   ├── components/            # 可复用组件
 │   │   │   ├── Sidebar.vue        # 侧边栏组件
-│   │   │   └── FolderTreeItem.vue # 分类树组件
+│   │   │   ├── FolderTreeItem.vue # 分类树组件
+│   │   │   └── ChangePasswordDialog.vue # 修改密码对话框
 │   │   ├── composables/           # 组合式函数
 │   │   │   ├── useSidebar.ts      # 侧边栏逻辑
 │   │   │   └── useCommon.ts       # 通用工具函数
@@ -323,7 +324,11 @@ server {
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | /api/shared/:token | 通过分享链接查看笔记 |
+| POST | /api/shared/access | 安全访问分享（交换 token 为 session cookie） |
+| GET | /api/shared/view/:id | 通过 session cookie 查看分享笔记 |
+| POST | /api/shared/logout | 清除分享 session |
+
+> **安全说明**：分享 token 仅在首次访问时使用，之后通过 HttpOnly Cookie session 访问，避免 token 暴露在 URL 中。
 
 ### OSS 上传
 
@@ -388,8 +393,9 @@ server {
 
 - **JWT Token** - 存储在 HttpOnly Cookie 中，有效防止 XSS 攻击获取 Token
 - **密码加密** - 使用 BCrypt 算法加密存储
+- **安全分享** - 分享 token 仅在首次访问时使用，之后通过 HttpOnly Cookie session 访问，URL 不暴露 token
 - **XSS 防护** - 分享内容通过 DOMPurify 进行 HTML 净化
-- **速率限制** - 认证接口 5 次/分钟，笔记接口 60 次/秒，防止暴力破解和接口滥用
+- **速率限制** - 认证接口 5 次/分钟，分享接口 30 次/分钟，笔记接口 60 次/秒
 - **CORS** - 严格配置跨域访问策略
 - **软删除** - 笔记删除采用软删除策略，可恢复
 - **请求取消** - 路由切换时自动取消 pending 请求，防止竞态条件
@@ -402,8 +408,10 @@ server {
 - **预加载编辑器** - 鼠标悬停笔记卡片时预加载 Vditor 编辑器
 - **N+1 查询优化** - 使用批量更新替代循环更新
 - **分页查询** - 笔记列表支持分页加载
+- **按需加载笔记** - 侧边栏展开文件夹时才加载该目录下的笔记
 - **请求去重** - 笔记自动保存防抖处理
 - **响应时效检测** - 忽略过时响应，防止数据错乱
+- **单例状态管理** - useSidebar composable 采用单例模式，确保多组件间状态同步
 
 ## 常见问题
 

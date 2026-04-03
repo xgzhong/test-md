@@ -166,7 +166,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Back, Loading } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { notesAPI, foldersAPI } from '../api'
+import { notesAPI, foldersAPI, getTokenFromCookie } from '../api'
 import Sidebar from '../components/Sidebar.vue'
 import { flattenFolders } from '../composables/useCommon'
 import packageJson from '../../package.json'
@@ -202,7 +202,7 @@ const cancelPendingRequests = () => {
 }
 
 // 转换外部图片 URL 为 OSS URL
-const transformExternalImages = async (text, getToken) => {
+const transformExternalImages = async (text) => {
   const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
 
   // 收集所有需要替换的图片
@@ -241,7 +241,7 @@ const transformExternalImages = async (text, getToken) => {
       const mimeType = blob.type || 'image/png'
 
       // 获取预签名 URL 并上传
-      const token = getToken()
+      const token = getTokenFromCookie()
       const presignedResponse = await fetch('/api/oss/presigned-url', {
         method: 'POST',
         headers: {
@@ -530,11 +530,7 @@ const initVditor = (content, onReady) => {
         ElMessage.info('正在处理粘贴的图片...')
 
         // 下载并上传
-        const getToken = () => {
-          const cookies = document.cookie.split('; ')
-          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
-          return tokenCookie ? tokenCookie.split('=')[1] : null
-        }
+        const token = getTokenFromCookie()
 
         let result = resultText
         for (const m of matches) {
@@ -546,7 +542,6 @@ const initVditor = (content, onReady) => {
             const fileName = m.url.split('/').pop()?.split('?')[0] || 'image.png'
             const mimeType = blob.type || 'image/png'
 
-            const token = getToken()
             const presignedResponse = await fetch('/api/oss/presigned-url', {
               method: 'POST',
               headers: {
@@ -656,11 +651,7 @@ const initVditor = (content, onReady) => {
       // 粘贴图片时自动上传到 OSS
       paste: async (ev, files) => {
         // 从 cookie 获取 token
-        const getToken = () => {
-          const cookies = document.cookie.split('; ')
-          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
-          return tokenCookie ? tokenCookie.split('=')[1] : null
-        }
+        const token = getTokenFromCookie()
 
         // 1. 先处理实际图片文件
         const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'))
@@ -668,7 +659,6 @@ const initVditor = (content, onReady) => {
           // 处理实际图片的上传（保持原有逻辑）
           const file = imageFiles[0]
           const uploadAndInsert = async (f, fName) => {
-            const token = getToken()
             const presignedResponse = await fetch('/api/oss/presigned-url', {
               method: 'POST',
               headers: {
@@ -746,7 +736,7 @@ const initVditor = (content, onReady) => {
 
           try {
             // 下载并上传所有外部图片
-            const newText = await transformExternalImages(clipboardText, getToken)
+            const newText = await transformExternalImages(clipboardText)
 
             // 插入转换后的文本
             vditor.insertValue(newText)
@@ -768,15 +758,10 @@ const initVditor = (content, onReady) => {
         if (!file) return
 
         // 从 cookie 获取 token
-        const getToken = () => {
-          const cookies = document.cookie.split('; ')
-          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
-          return tokenCookie ? tokenCookie.split('=')[1] : null
-        }
+        const token = getTokenFromCookie()
 
         try {
           // 1. 获取预签名 URL
-          const token = getToken()
           const presignedResponse = await fetch('/api/oss/presigned-url', {
             method: 'POST',
             headers: {
